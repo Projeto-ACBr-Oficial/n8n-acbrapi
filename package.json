@@ -21,10 +21,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/projeto-acbr-oficial/n8n-acbrapi.git"
+    "url": "git+https://github.com/Projeto-ACBr-Oficial/n8n-acbrapi.git"
   },
   "bugs": {
-    "url": "https://github.com/projeto-acbr-oficial/n8n-acbrapi/issues"
+    "url": "https://github.com/Projeto-ACBr-Oficial/n8n-acbrapi/issues"
   },
   "engines": {
     "node": ">=20.15"
