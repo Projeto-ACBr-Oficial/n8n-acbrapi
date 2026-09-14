@@ -114,7 +114,7 @@
 			"section": "auto",
 			"fill": "node",
 			"description": "Identifier of the application issuing the invoice (verAplic).",
-			"nota": "Identificar o conector com token CURTO, ex. 'n8n-acbrapi/<versão>' — dá à ACBr medição de adoção no lado do servidor (P-33). O nome do pacote (@projetoacbr/n8n-nodes-acbr-api) não cabe: campo fiscal com limite de tamanho, a confirmar em P-06. Referência: o autorizador usa 'SefinNacional_1.6.0' (19 caracteres)."
+			"nota": "Identificar o conector com token CURTO, ex. 'n8n-acbrapi/<versão>' — dá à ACBr medição de adoção no lado do servidor (P-33). O nome do pacote (@projetoacbr/n8n-nodes-acbrapi) não cabe: campo fiscal com limite de tamanho, a confirmar em P-06. Referência: o autorizador usa 'SefinNacional_1.6.0' (19 caracteres)."
 		},
 		"infDPS.dCompet": {
 			"ptName": "dCompet",

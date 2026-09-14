@@ -1,4 +1,4 @@
-# n8n-nodes-acbr-api
+# n8n-nodes-acbrapi
 
 **Official** n8n node for the [ACBr API](https://acbr.api.br), built and maintained by the ACBr team
 — Brazilian electronic fiscal documents and business data lookups, driven from your workflows.
@@ -72,7 +72,7 @@ Follow the
 [community nodes installation guide](https://docs.n8n.io/integrations/community-nodes/installation/).
 
 On self-hosted n8n, through the UI: **Settings → Community nodes → Install**, then enter
-`@projetoacbr/n8n-nodes-acbr-api`.
+`@projetoacbr/n8n-nodes-acbrapi`.
 
 ## Credentials
 
@@ -251,7 +251,7 @@ n8n canvas, then replace the provider CNPJ, the customer data and the service co
       },
       "id": "a1000000-0000-4000-8000-000000000002",
       "name": "Issue invoice",
-      "type": "@projetoacbr/n8n-nodes-acbr-api.acbrApi",
+      "type": "@projetoacbr/n8n-nodes-acbrapi.acbrApi",
       "typeVersion": 1,
       "position": [220, 0],
       "credentials": {

@@ -18,11 +18,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "preserveConstEnums": true,
-    "incremental": true,
-    // Fora de dist/: o publicado em `files` é dist/ inteiro, e o tsbuildinfo
-    // não tem por que ir no tarball.
-    "tsBuildInfoFile": "./.tsbuildinfo"
+    "preserveConstEnums": true
+    // Sem "incremental": o .tsbuildinfo fica fora de dist/ para não ir no
+    // tarball, e aí apagar dist/ não invalida o cache — o tsc não emite nada e
+    // o build "passa" produzindo um pacote sem JS. São três arquivos de fonte;
+    // compilar do zero custa segundos.
   },
   "include": ["credentials/**/*.ts", "nodes/**/*.ts"],
   "exclude": ["node_modules", "dist", "scripts"]
