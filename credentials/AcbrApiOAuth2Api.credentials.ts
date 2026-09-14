@@ -1,4 +1,4 @@
-import type { ICredentialType, INodeProperties } from 'n8n-workflow';
+import type { ICredentialTestRequest, ICredentialType, INodeProperties } from 'n8n-workflow';
 
 /**
  * Credencial OAuth2 client_credentials da ACBr API.
@@ -21,6 +21,35 @@ export class AcbrApiOAuth2Api implements ICredentialType {
 	icon = 'file:acbrApi.svg' as const;
 
 	documentationUrl = 'https://dev.acbr.api.br/docs/autenticacao';
+
+	/**
+	 * Teste de conexão da credencial.
+	 *
+	 * Roda a consulta de CEP: é o endpoint mais barato que exige um token válido,
+	 * não depende de empresa cadastrada nem de certificado, e responde em
+	 * milissegundos. Custa 0,1 crédito por teste.
+	 *
+	 * Em troca, depende do escopo 'cep'. Quem desmarcar esse escopo recebe 403 no
+	 * teste mesmo com credencial correta — daí a regra abaixo, que troca o 403
+	 * cru por uma frase que diz o que houve.
+	 */
+	test: ICredentialTestRequest = {
+		request: {
+			baseURL:
+				'={{ $credentials.environment === "producao" ? "https://prod.acbr.api.br" : "https://hom.acbr.api.br" }}',
+			url: '/cep/01001000',
+		},
+		rules: [
+			{
+				type: 'responseCode',
+				properties: {
+					value: 403,
+					message:
+						"The credentials are valid, but this credential does not have the 'Postal Code Lookup' scope, which the connection test uses. Enable it below, or ignore this if you do not need postal code lookups.",
+				},
+			},
+		],
+	};
 
 	properties: INodeProperties[] = [
 		{
