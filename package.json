@@ -1,6 +1,6 @@
 {
   "name": "@projetoacbr/n8n-nodes-acbrapi",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Official n8n node for the ACBr API, maintained by the ACBr team: Brazilian electronic fiscal documents and business data lookups. Service invoices (NFS-e), CNPJ and postal code in this version, more document types to follow.",
   "keywords": [
     "n8n-community-node-package",
@@ -48,8 +48,8 @@
     "gen": "node scripts/gerar-properties.mjs",
     "build": "npm run gen && tsc && node scripts/copiar-icones.mjs",
     "dev": "npm run gen && tsc --watch",
-    "lint": "eslint nodes credentials package.json",
-    "lintfix": "eslint nodes credentials package.json --fix",
+    "lint": "eslint nodes/**/*.ts credentials/**/*.ts package.json",
+    "lintfix": "eslint nodes/**/*.ts credentials/**/*.ts package.json --fix",
     "format": "prettier nodes credentials scripts --write",
     "prepublishOnly": "npm run build && npm run lint",
     "n8n:up": "docker compose up -d",
@@ -61,11 +61,11 @@
     "n8n-workflow": "*"
   },
   "devDependencies": {
+    "@n8n/eslint-plugin-community-nodes": "^0.32.0",
     "@types/node": "^20.14.0",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8.57.0",
-    "eslint-plugin-n8n-nodes-base": "^1.16.3",
+    "@typescript-eslint/parser": "^8.70.0",
+    "eslint": "9.29.0",
+    "eslint-plugin-n8n-nodes-base": "^1.16.7",
     "n8n-workflow": "*",
     "prettier": "^3.3.0",
     "typescript": "^5.5.0"

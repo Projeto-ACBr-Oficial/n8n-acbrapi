@@ -8,7 +8,7 @@ import type {
 	INodeTypeDescription,
 	JsonObject,
 } from 'n8n-workflow';
-import { NodeApiError, NodeOperationError } from 'n8n-workflow';
+import { NodeApiError, NodeConnectionTypes, NodeOperationError, sleep } from 'n8n-workflow';
 
 import {
 	ERROR_MAP,
@@ -25,7 +25,7 @@ const BASE_URL: Record<string, string> = {
 };
 
 /** Identificação do conector no campo fiscal verAplic. Curto por limite de tamanho (P-33). */
-const VER_APLIC = 'n8n-acbrapi/1.0.1';
+const VER_APLIC = 'n8n-acbrapi/1.0.2';
 
 /** Único status não terminal. Whitelist do que continua, não do que termina. */
 const STATUS_EM_ANDAMENTO = 'processando';
@@ -61,10 +61,8 @@ export class AcbrApi implements INodeType {
 		defaults: { name: 'ACBr API' },
 		// Permite que um AI Agent chame estas operações como ferramentas (P-26).
 		usableAsTool: true,
-		// Forma de string aceita em todas as versões alvo; o cast evita depender do
-		// enum NodeConnectionType, que mudou de nome entre linhas do n8n.
-		inputs: ['main'] as unknown as INodeTypeDescription['inputs'],
-		outputs: ['main'] as unknown as INodeTypeDescription['outputs'],
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main],
 		credentials: [{ name: 'acbrApiOAuth2Api', required: true }],
 		properties: [
 			{
@@ -425,7 +423,9 @@ export class AcbrApi implements INodeType {
   corpo enviado: ${JSON.stringify(opcoes.body ?? null)}
   erro: ${descreverErro(erro)}`,
 				);
-				throw erro;
+				// Traduz aqui, na origem: a partir deste ponto todo erro que circula
+				// já é NodeOperationError ou NodeApiError, nunca a forma crua.
+				throw traduzirErro.call(this, erro);
 			}
 		};
 
@@ -655,17 +655,19 @@ async function emitirComReplay(
 	try {
 		return await requisicao('POST', '/nfse/dps', { body: corpo });
 	} catch (erro) {
-		if (!eReferenciaDuplicada(erro)) throw erro;
+		// `requisicao` já devolve erro de node; isto é só a garantia de tipo.
+		const falha = comoErroDeNode.call(this, erro);
+		if (!eReferenciaDuplicada(erro)) throw falha;
 
 		const referencia = corpo.referencia as string | undefined;
 		const cpfCnpj = ((corpo.infDPS as IDataObject)?.prest as IDataObject)?.CNPJ as string;
-		if (!referencia) throw erro;
+		if (!referencia) throw falha;
 
 		const lista = await requisicao('GET', '/nfse', {
 			qs: { cpf_cnpj: cpfCnpj, ambiente: corpo.ambiente as string, referencia },
 		});
 		const existente = (lista.data as IDataObject[] | undefined)?.[0];
-		if (!existente) throw erro;
+		if (!existente) throw falha;
 
 		this.logger.info(
 			`ACBr API: reference '${referencia}' already used; returning the existing invoice instead of issuing a new one.`,
@@ -689,7 +691,7 @@ async function aguardarConclusao(
 	let atual = nota;
 
 	while (atual.status === STATUS_EM_ANDAMENTO && Date.now() < limite) {
-		await new Promise((r) => setTimeout(r, 5000));
+		await sleep(5000);
 		// Consultar não tem consumo documentado; Sincronizar cobra 1 unidade por
 		// requisição e por isso nunca é usado em laço.
 		atual = await requisicao('GET', `/nfse/${id}`);
@@ -705,11 +707,24 @@ async function aguardarConclusao(
 	return atual;
 }
 
+/**
+ * O erro chega aqui já traduzido por `traduzirErro`, então a mensagem é o texto
+ * em inglês do de-para e a frase original da API vive na `description`. Procura
+ * nas duas: o trecho em pt-BR é específico o bastante para identificar sozinho,
+ * e depender do status 400 deixou de ser possível — NodeOperationError não
+ * carrega httpCode.
+ */
 function eReferenciaDuplicada(erro: unknown): boolean {
-	const e = erro as { httpCode?: string; statusCode?: number; message?: string };
-	const status = Number(e.httpCode ?? e.statusCode);
-	const trecho = ERROR_MAP.referenciaDuplicada.apiMessagePt ?? '';
-	return status === 400 && String(e.message ?? '').includes(trecho);
+	const e = erro as { message?: string; description?: string };
+	const { apiMessagePt, displayMessage } = ERROR_MAP.referenciaDuplicada;
+	const texto = `${e.message ?? ''} ${e.description ?? ''}`;
+	return texto.includes(apiMessagePt) || texto.includes(displayMessage);
+}
+
+/** Garantia de tipo: o que sai daqui é sempre erro de node, nunca forma crua. */
+function comoErroDeNode(this: IExecuteFunctions, erro: unknown): Error {
+	if (erro instanceof NodeApiError || erro instanceof NodeOperationError) return erro;
+	return new NodeApiError(this.getNode(), erro as JsonObject);
 }
 
 /** Substitui a mensagem crua da API pelo texto mapeado no de-para (P-17). */
@@ -775,6 +790,12 @@ function detalheDaApi(erro: unknown): string {
 }
 
 function traduzirErro(this: IExecuteFunctions, erro: unknown): Error {
+	// Idempotente: `requisicao` já traduz na origem, e o catch do laço de itens
+	// passa por aqui de novo. Reembrulhar produziria "mensagem — mensagem".
+	// Ainda é necessário para os erros crus de `baixarArquivo`, que chama o
+	// helper HTTP direto.
+	if (erro instanceof NodeOperationError || erro instanceof NodeApiError) return erro;
+
 	const e = erro as { message?: string; httpCode?: string; statusCode?: number };
 	const mensagem = String(e.message ?? '');
 	const status = Number(e.httpCode ?? e.statusCode);
@@ -797,6 +818,5 @@ function traduzirErro(this: IExecuteFunctions, erro: unknown): Error {
 	if (detalhe) {
 		return new NodeOperationError(this.getNode(), completa, { description: detalhe });
 	}
-	if (erro instanceof Error) return erro;
-	return new NodeApiError(this.getNode(), erro as JsonObject);
+	return comoErroDeNode.call(this, erro);
 }

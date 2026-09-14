@@ -324,9 +324,14 @@ field semantics.
 
 ```bash
 npm run gen      # regenerate the properties from the mapping
-npm run lint     # the linter n8n verification uses
+npm run lint     # the exact ruleset n8n verification runs
 npm run format
 ```
+
+`eslint.config.mjs` mirrors, rule for rule, the configuration that
+`@n8n/scan-community-package` builds when a submitted node is scanned — both
+plugins, the same rulesets, the same off-overrides. A clean `npm run lint` here
+is a clean scan there, and CI runs it on every push.
 
 ## Roadmap
 

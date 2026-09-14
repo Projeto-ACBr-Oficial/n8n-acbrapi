@@ -20,7 +20,6 @@ export class AcbrApiOAuth2Api implements ICredentialType {
 
 	icon = 'file:acbrApi.svg' as const;
 
-	// eslint-disable-next-line n8n-nodes-base/cred-class-field-documentation-url-miscased
 	documentationUrl = 'https://dev.acbr.api.br/docs/autenticacao';
 
 	properties: INodeProperties[] = [
