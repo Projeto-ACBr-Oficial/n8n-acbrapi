@@ -1,6 +1,6 @@
 {
   "name": "@projetoacbr/n8n-nodes-acbrapi",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Official n8n node for the ACBr API, maintained by the ACBr team: Brazilian electronic fiscal documents and business data lookups. Service invoices (NFS-e), CNPJ and postal code in this version, more document types to follow.",
   "keywords": [
     "n8n-community-node-package",
@@ -17,6 +17,7 @@
   "homepage": "https://acbr.api.br",
   "author": {
     "name": "Projeto ACBr",
+    "email": "ti@projetoacbr.com.br",
     "url": "https://projetoacbr.com.br"
   },
   "repository": {

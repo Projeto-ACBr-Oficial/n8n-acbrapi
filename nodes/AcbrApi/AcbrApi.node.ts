@@ -25,7 +25,7 @@ const BASE_URL: Record<string, string> = {
 };
 
 /** Identificação do conector no campo fiscal verAplic. Curto por limite de tamanho (P-33). */
-const VER_APLIC = 'n8n-acbrapi/1.0.0';
+const VER_APLIC = 'n8n-acbrapi/1.0.1';
 
 /** Único status não terminal. Whitelist do que continua, não do que termina. */
 const STATUS_EM_ANDAMENTO = 'processando';
