@@ -29,7 +29,11 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      - run: npm ci
+      # --ignore-scripts is required, not hygiene: eslint-plugin-n8n-nodes-base
+      # ships "preinstall": "npx only-allow pnpm", which aborts the install when
+      # the package manager is npm. It also skips building isolated-vm, pulled in
+      # by n8n-workflow and never needed to lint or typecheck.
+      - run: npm ci --ignore-scripts
 
       # Generate the properties before linting: the node imports
       # properties.generated.ts, which is not versioned.
