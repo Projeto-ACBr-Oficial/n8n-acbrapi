@@ -1,0 +1,23 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Generated from de-para/ by `npm run gen` — not versioned.
+nodes/AcbrApi/properties.generated.ts
+
+# Local environment
+.env
+.env.local
+.n8n/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Example flows are not published yet. This is a guard, so that a copy dropped
+# in here is never committed by accident. The example workflow the node ships
+# with is embedded in the README.
+exemplos/
+examples/

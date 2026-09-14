@@ -1,0 +1,72 @@
+{
+  "name": "@projetoacbr/n8n-nodes-acbr-api",
+  "version": "1.0.0",
+  "description": "Official n8n node for the ACBr API, maintained by the ACBr team: Brazilian electronic fiscal documents and business data lookups. Service invoices (NFS-e), CNPJ and postal code in this version, more document types to follow.",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "acbr",
+    "acbr-api",
+    "nfse",
+    "nota-fiscal",
+    "nota-fiscal-de-servico",
+    "brasil",
+    "fiscal"
+  ],
+  "license": "MIT",
+  "homepage": "https://acbr.api.br",
+  "author": {
+    "name": "Projeto ACBr",
+    "url": "https://projetoacbr.com.br"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/projeto-acbr-oficial/n8n-acbrapi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/projeto-acbr-oficial/n8n-acbrapi/issues"
+  },
+  "engines": {
+    "node": ">=20.15"
+  },
+  "main": "index.js",
+  "files": [
+    "dist",
+    "index.js"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/AcbrApiOAuth2Api.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/AcbrApi/AcbrApi.node.js"
+    ]
+  },
+  "scripts": {
+    "gen": "node scripts/gerar-properties.mjs",
+    "build": "npm run gen && tsc && node scripts/copiar-icones.mjs",
+    "dev": "npm run gen && tsc --watch",
+    "lint": "eslint nodes credentials package.json",
+    "lintfix": "eslint nodes credentials package.json --fix",
+    "format": "prettier nodes credentials scripts --write",
+    "prepublishOnly": "npm run build && npm run lint",
+    "n8n:up": "docker compose up -d",
+    "n8n:logs": "docker compose logs -f n8n",
+    "n8n:restart": "docker compose restart n8n",
+    "n8n:down": "docker compose down"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-n8n-nodes-base": "^1.16.3",
+    "n8n-workflow": "*",
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0"
+  }
+}

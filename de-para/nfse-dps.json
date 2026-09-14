@@ -1,0 +1,764 @@
+{
+	"meta": {
+		"versao": "0.1",
+		"data": "2026-08-19",
+		"escopo": "POST /nfse/dps — campos obrigatórios e os presentes nos payloads de exemplo (10/08/2026 e emissão autorizada de 18/08/2026)",
+		"objetivo": "Fonte única do de-para pt-BR → inglês. As properties do node são GERADAS deste arquivo, não escritas à mão. Revisável por fiscalista sem ler TypeScript.",
+		"convencoes": {
+			"chave": "Caminho JSON completo no payload de emissão.",
+			"displayName": "Rótulo visível na UI do node. Obrigatoriamente em inglês (verificação n8n).",
+			"name": "Nome interno do parâmetro no n8n, camelCase em inglês. Ver 'questaoAberta' abaixo.",
+			"ptName": "Nome original do campo na API. Vai na description e serve de chave para mapear erro da API de volta ao campo (P-17).",
+			"fill": "Quem fornece o valor: 'node' (preenchido automaticamente, não exposto), 'credential', 'user', 'template' (modelo de serviço), 'api' (injetado pela API a partir do cadastro da empresa).",
+			"section": "Agrupamento na UI. Seções diferentes de 'core' ficam atrás de toggle.",
+			"optionsPendentes": "Marca enum cujo conjunto de valores ainda não foi extraído do swagger (P-06). NÃO inventar valores."
+		},
+		"questaoAberta": "A verificação do n8n exige nomes de parâmetro em inglês. Não está claro se isso alcança o 'name' interno (visível apenas em expressões) ou só o 'displayName'. Este arquivo adota 'name' em inglês por segurança, mantendo 'ptName' para rastreabilidade e mapeamento de erro.",
+		"naoEnviar": [
+			"infDPS.serie e infDPS.nDPS — numeração, vem da configuração da empresa",
+			"infDPS.prest.regTrib.opSimpNac e .regEspTrib — injetados pela API a partir do cadastro",
+			"infDPS.serv.locPrest.cLocPrestacao — injetado a partir do município do prestador",
+			"infDPS.valores.trib.tribMun.pAliq, vBC, vISSQN, vLiq — quem calcula é o município/provedor"
+		]
+	},
+	"campos": {
+		"provedor": {
+			"ptName": "provedor",
+			"displayName": "Provider",
+			"name": "provider",
+			"type": "options",
+			"required": true,
+			"section": "core",
+			"fill": "node",
+			"default": "nacional",
+			"description": "Integration standard used to reach the city hall. Defaults to the national standard (provedor).",
+			"options": [
+				{
+					"value": "nacional",
+					"label": "National standard"
+				}
+			],
+			"optionsPendentes": "P-07 — 'nacional' é o único valor observado em payload real. Confirmar os demais e quando usar cada um."
+		},
+		"ambiente": {
+			"ptName": "ambiente",
+			"displayName": "Environment",
+			"name": "environment",
+			"type": "options",
+			"required": true,
+			"section": "core",
+			"fill": "user",
+			"description": "Target environment (ambiente). Must match what the company has configured for NFS-e — readable at GET /empresas/{cnpj}/nfse.",
+			"options": [
+				{
+					"value": "homologacao",
+					"label": "Staging"
+				},
+				{
+					"value": "producao",
+					"label": "Production"
+				}
+			],
+			"nota": "Passado pelo chamador, não deduzido da credential: a mesma credential atende N empresas e cada uma tem seu ambiente no cadastro. O node transcreve para infDPS.tpAmb (producao=1, homologacao=2). A URL base continua vindo da credential — host é onde a API está, ambiente é dado do pedido (prod.acbr.api.br atende ambiente=homologacao). Default homologacao: erra para o lado seguro. Muitos municípios não têm homologação — erro X999, ver P-16.",
+			"default": "homologacao"
+		},
+		"referencia": {
+			"ptName": "referencia",
+			"displayName": "External Reference",
+			"name": "externalReference",
+			"type": "string",
+			"required": false,
+			"section": "core",
+			"fill": "user",
+			"description": "Your own identifier for this invoice (referencia). Returned by Get and List, so it links the invoice back to your records without a local table.",
+			"nota": "É a chave de idempotência: a API valida unicidade (bloqueia em processando, autorizada e cancelada; libera após erro de processamento) e o ListarNfse aceita o campo como filtro, o que viabiliza o replay. Gerar UMA vez e reusar em toda retentativa — nunca regenerar. Formato recomendado: chave de negócio determinística com sufixo de tentativa, ex. '{id_contrato}-2026-08' e '-r2' na reemissão após cancelamento."
+		},
+		"infDPS.tpAmb": {
+			"ptName": "tpAmb",
+			"displayName": "Environment Code",
+			"name": "environmentCode",
+			"type": "options",
+			"required": true,
+			"section": "auto",
+			"fill": "node",
+			"description": "Environment code inside the DPS (tpAmb). Derived from the credential environment.",
+			"options": [
+				{
+					"value": 1,
+					"label": "Production"
+				},
+				{
+					"value": 2,
+					"label": "Staging"
+				}
+			],
+			"nota": "Confirmado: 2 = homologação (ambGer 2 no XML autorizado). Não expor ao usuário."
+		},
+		"infDPS.dhEmi": {
+			"ptName": "dhEmi",
+			"displayName": "Issue Date and Time",
+			"name": "issuedAt",
+			"type": "dateTime",
+			"required": true,
+			"section": "auto",
+			"fill": "node",
+			"description": "Issue timestamp (dhEmi), ISO 8601 with timezone offset. Filled with the current time.",
+			"exemplo": "2026-08-18T11:55:00-03:00"
+		},
+		"infDPS.verAplic": {
+			"ptName": "verAplic",
+			"displayName": "Application Version",
+			"name": "applicationVersion",
+			"type": "string",
+			"required": true,
+			"section": "auto",
+			"fill": "node",
+			"description": "Identifier of the application issuing the invoice (verAplic).",
+			"nota": "Identificar o conector com token CURTO, ex. 'n8n-acbrapi/<versão>' — dá à ACBr medição de adoção no lado do servidor (P-33). O nome do pacote (@projetoacbr/n8n-nodes-acbr-api) não cabe: campo fiscal com limite de tamanho, a confirmar em P-06. Referência: o autorizador usa 'SefinNacional_1.6.0' (19 caracteres)."
+		},
+		"infDPS.dCompet": {
+			"ptName": "dCompet",
+			"displayName": "Service Period",
+			"name": "servicePeriod",
+			"type": "dateTime",
+			"required": true,
+			"section": "core",
+			"fill": "user",
+			"default": "today",
+			"description": "Date the service was rendered (dCompet), format YYYY-MM-DD. Defaults to today."
+		},
+		"infDPS.prest.CNPJ": {
+			"ptName": "prest.CNPJ",
+			"displayName": "Service Provider Tax ID",
+			"name": "providerCnpj",
+			"type": "string",
+			"required": true,
+			"section": "provider",
+			"fill": "user",
+			"description": "Tax ID (CNPJ) of the company issuing the invoice. Must already be registered under your ACBr API tenant, with a certificate and NFS-e settings.",
+			"nota": "POR EXECUÇÃO, não por credencial. Um tenant de software house atende N empresas com a mesma credencial, então este campo é o que seleciona qual delas emite — é o que permite ao conector orquestrar um produto multiempresa. Alternativa mutuamente exclusiva: infDPS.prest.CPF."
+		},
+		"infDPS.prest.CPF": {
+			"ptName": "prest.CPF",
+			"displayName": "Service Provider Individual Tax ID",
+			"name": "providerCpf",
+			"type": "string",
+			"required": false,
+			"section": "provider",
+			"fill": "user",
+			"description": "Individual tax ID (CPF) of the provider, when the provider is a person rather than a company. Mutually exclusive with the company tax ID."
+		},
+		"infDPS.toma.CNPJ": {
+			"ptName": "toma.CNPJ",
+			"displayName": "Customer Tax ID",
+			"name": "customerCnpj",
+			"type": "string",
+			"required": false,
+			"section": "customer",
+			"fill": "user",
+			"description": "Customer company tax ID (CNPJ). Use the Consult CNPJ operation to fill the remaining customer fields from it.",
+			"nota": "Para PJ, este é o único dado que o usuário precisa informar — ConsultarCnpj devolve nome e endereço."
+		},
+		"infDPS.toma.CPF": {
+			"ptName": "toma.CPF",
+			"displayName": "Customer Individual Tax ID",
+			"name": "customerCpf",
+			"type": "string",
+			"required": false,
+			"section": "customer",
+			"fill": "user",
+			"description": "Customer individual tax ID (CPF). Mutually exclusive with the customer company tax ID.",
+			"nota": "Não há consulta por CPF — para pessoa física o nome e o endereço precisam ser informados."
+		},
+		"infDPS.toma.xNome": {
+			"ptName": "toma.xNome",
+			"displayName": "Customer Name",
+			"name": "customerName",
+			"type": "string",
+			"required": true,
+			"section": "customer",
+			"fill": "user",
+			"description": "Customer legal or full name (xNome)."
+		},
+		"infDPS.toma.end.endNac.cMun": {
+			"ptName": "toma.end.endNac.cMun",
+			"displayName": "Customer City Code",
+			"name": "customerCityCode",
+			"type": "string",
+			"required": true,
+			"section": "customer",
+			"fill": "user",
+			"description": "IBGE code of the customer city (cMun), 7 digits. The Consult Address by Postal Code operation returns it.",
+			"exemplo": "3554003"
+		},
+		"infDPS.toma.end.endNac.CEP": {
+			"ptName": "toma.end.endNac.CEP",
+			"displayName": "Customer Postal Code",
+			"name": "customerPostalCode",
+			"type": "string",
+			"required": true,
+			"section": "customer",
+			"fill": "user",
+			"description": "Customer postal code (CEP), digits only. Use the Consult Address by Postal Code operation to fill street, district and city from it."
+		},
+		"infDPS.toma.end.xLgr": {
+			"ptName": "toma.end.xLgr",
+			"displayName": "Customer Street",
+			"name": "customerStreet",
+			"type": "string",
+			"required": true,
+			"section": "customer",
+			"fill": "user",
+			"description": "Customer street name (xLgr)."
+		},
+		"infDPS.toma.end.nro": {
+			"ptName": "toma.end.nro",
+			"displayName": "Customer Street Number",
+			"name": "customerStreetNumber",
+			"type": "string",
+			"required": true,
+			"section": "customer",
+			"fill": "user",
+			"description": "Customer street number (nro)."
+		},
+		"infDPS.toma.end.xBairro": {
+			"ptName": "toma.end.xBairro",
+			"displayName": "Customer District",
+			"name": "customerDistrict",
+			"type": "string",
+			"required": true,
+			"section": "customer",
+			"fill": "user",
+			"description": "Customer district or neighbourhood (xBairro)."
+		},
+		"infDPS.toma.fone": {
+			"ptName": "toma.fone",
+			"displayName": "Customer Phone",
+			"name": "customerPhone",
+			"type": "string",
+			"required": false,
+			"section": "customer",
+			"fill": "user",
+			"description": "Customer phone number (fone), digits only including area code."
+		},
+		"infDPS.toma.email": {
+			"ptName": "toma.email",
+			"displayName": "Customer Email",
+			"name": "customerEmail",
+			"type": "string",
+			"required": false,
+			"section": "customer",
+			"fill": "user",
+			"description": "Customer email address (email). The API does not send email for NFS-e — use your own email node with the returned PDF."
+		},
+		"infDPS.serv.cServ.cTribNac": {
+			"ptName": "serv.cServ.cTribNac",
+			"displayName": "National Service Code",
+			"name": "nationalServiceCode",
+			"type": "resourceLocator",
+			"required": true,
+			"section": "service",
+			"fill": "template",
+			"description": "National service taxation code (cTribNac): 6 digits, from the service list of Complementary Law 116/2003, written without separators (item + sub-item + breakdown, so 14.02.01 becomes 140201). It decides how the city taxes the service, so the wrong code produces a valid invoice with the wrong tax. There is no lookup endpoint - find the code for your service in the official list at <a href=\"https://www.gov.br/nfse/pt-br/mei-e-demais-empresas/codigos-de-tributacao-nacional-nbs\" target=\"_blank\">gov.br/nfse</a>, or ask your accountant.",
+			"exemplo": "140201",
+			"nota": "Não há endpoint de consulta. Tabela embarcada no node com atualização a partir do JSON estático (P-01). Searchable resource locator por causa do tamanho da lista."
+		},
+		"infDPS.serv.cServ.xDescServ": {
+			"ptName": "serv.cServ.xDescServ",
+			"displayName": "Service Description",
+			"name": "serviceDescription",
+			"type": "string",
+			"required": true,
+			"section": "service",
+			"fill": "user",
+			"description": "Free-text description of the service rendered (xDescServ). Appears on the invoice.",
+			"n8n": {
+				"typeOptions": {
+					"rows": 3
+				}
+			}
+		},
+		"infDPS.serv.cServ.cNBS": {
+			"ptName": "serv.cServ.cNBS",
+			"displayName": "NBS Code",
+			"name": "nbsCode",
+			"type": "string",
+			"required": false,
+			"section": "service",
+			"fill": "template",
+			"description": "Brazilian Service Nomenclature code (cNBS).",
+			"exemplo": "115021000"
+		},
+		"infDPS.serv.cServ.cTribMun": {
+			"ptName": "serv.cServ.cTribMun",
+			"displayName": "Municipal Service Code",
+			"name": "municipalServiceCode",
+			"type": "string",
+			"required": false,
+			"section": "service",
+			"fill": "template",
+			"description": "City-specific service code (cTribMun). Required by some cities — check the city metadata.",
+			"nota": "Ausente na emissão autorizada de 18/08/2026, logo opcional no padrão nacional. Exigência por município em P-08."
+		},
+		"infDPS.serv.cServ.CNAE": {
+			"ptName": "serv.cServ.CNAE",
+			"displayName": "CNAE Code",
+			"name": "cnaeCode",
+			"type": "string",
+			"required": false,
+			"section": "service",
+			"fill": "template",
+			"description": "Economic activity classification code (CNAE).",
+			"exemplo": "6202300"
+		},
+		"infDPS.valores.vServPrest.vServ": {
+			"ptName": "valores.vServPrest.vServ",
+			"displayName": "Service Amount",
+			"name": "serviceAmount",
+			"type": "number",
+			"required": true,
+			"section": "core",
+			"fill": "user",
+			"description": "Amount charged for the service (vServ), in BRL with 2 decimal places.",
+			"n8n": {
+				"typeOptions": {
+					"numberPrecision": 2,
+					"minValue": 0
+				}
+			}
+		},
+		"infDPS.valores.trib.tribMun.tribISSQN": {
+			"ptName": "valores.trib.tribMun.tribISSQN",
+			"displayName": "Service Tax Treatment",
+			"name": "serviceTaxTreatment",
+			"type": "options",
+			"required": true,
+			"section": "taxation",
+			"fill": "template",
+			"default": 1,
+			"description": "How the municipal service tax applies to this operation (tribISSQN).",
+			"options": [
+				{
+					"value": 1,
+					"label": "Taxable operation"
+				}
+			],
+			"optionsPendentes": "P-06 — apenas o valor 1 foi observado em emissão real. Os demais (exportação, não incidência, imunidade, suspensão) precisam vir do swagger com os códigos exatos. NÃO inventar."
+		},
+		"infDPS.valores.trib.tribMun.tpRetISSQN": {
+			"ptName": "valores.trib.tribMun.tpRetISSQN",
+			"displayName": "Service Tax Withholding",
+			"name": "serviceTaxWithholding",
+			"type": "options",
+			"required": true,
+			"section": "taxation",
+			"fill": "template",
+			"default": 1,
+			"description": "Whether the municipal service tax is withheld, and by whom (tpRetISSQN).",
+			"options": [
+				{
+					"value": 1,
+					"label": "Not withheld"
+				}
+			],
+			"optionsPendentes": "P-06 — apenas o valor 1 foi observado. Confirmar os códigos de retenção pelo tomador e pelo intermediário. NÃO inventar."
+		},
+		"infDPS.valores.trib.tribMun.cLocIncid": {
+			"ptName": "valores.trib.tribMun.cLocIncid",
+			"displayName": "Taxing City Code",
+			"name": "taxingCityCode",
+			"type": "string",
+			"required": false,
+			"section": "taxation",
+			"fill": "node",
+			"description": "IBGE code of the city where the service tax is due (cLocIncid). Defaults to the provider city.",
+			"exemplo": "3554003"
+		},
+		"infDPS.valores.trib.totTrib.vTotTrib.vTotTribMun": {
+			"ptName": "valores.trib.totTrib.vTotTrib.vTotTribMun",
+			"displayName": "Estimated Municipal Taxes",
+			"name": "estimatedMunicipalTaxes",
+			"type": "number",
+			"required": false,
+			"section": "totalTaxes",
+			"fill": "user",
+			"description": "Estimated total municipal taxes shown on the invoice for consumer transparency (vTotTribMun).",
+			"n8n": {
+				"typeOptions": {
+					"numberPrecision": 2
+				}
+			}
+		},
+		"infDPS.valores.trib.totTrib.vTotTrib.vTotTribFed": {
+			"ptName": "valores.trib.totTrib.vTotTrib.vTotTribFed",
+			"displayName": "Estimated Federal Taxes",
+			"name": "estimatedFederalTaxes",
+			"type": "number",
+			"required": false,
+			"section": "totalTaxes",
+			"fill": "user",
+			"description": "Estimated total federal taxes shown on the invoice for consumer transparency (vTotTribFed).",
+			"n8n": {
+				"typeOptions": {
+					"numberPrecision": 2
+				}
+			}
+		},
+		"infDPS.valores.trib.totTrib.vTotTrib.vTotTribEst": {
+			"ptName": "valores.trib.totTrib.vTotTrib.vTotTribEst",
+			"displayName": "Estimated State Taxes",
+			"name": "estimatedStateTaxes",
+			"type": "number",
+			"required": false,
+			"section": "totalTaxes",
+			"fill": "user",
+			"description": "Estimated total state taxes shown on the invoice for consumer transparency (vTotTribEst).",
+			"n8n": {
+				"typeOptions": {
+					"numberPrecision": 2
+				}
+			}
+		},
+		"infDPS.valores.trib.totTrib.pTotTrib.pTotTribFed": {
+			"ptName": "valores.trib.totTrib.pTotTrib.pTotTribFed",
+			"displayName": "Estimated Federal Taxes (%)",
+			"name": "estimatedFederalTaxPercent",
+			"type": "number",
+			"required": false,
+			"section": "totalTaxes",
+			"fill": "user",
+			"default": 0,
+			"description": "Approximate total federal taxes as a percentage (pTotTribFed), per Lei 12.741/2012. Required when sending percentages instead of amounts."
+		},
+		"infDPS.valores.trib.totTrib.pTotTrib.pTotTribEst": {
+			"ptName": "valores.trib.totTrib.pTotTrib.pTotTribEst",
+			"displayName": "Estimated State Taxes (%)",
+			"name": "estimatedStateTaxPercent",
+			"type": "number",
+			"required": false,
+			"section": "totalTaxes",
+			"fill": "user",
+			"default": 0,
+			"description": "Approximate total state taxes as a percentage (pTotTribEst), per Lei 12.741/2012. Required when sending percentages instead of amounts."
+		},
+		"infDPS.valores.trib.totTrib.pTotTrib.pTotTribMun": {
+			"ptName": "valores.trib.totTrib.pTotTrib.pTotTribMun",
+			"displayName": "Estimated Municipal Taxes (%)",
+			"name": "estimatedMunicipalTaxPercent",
+			"type": "number",
+			"required": false,
+			"section": "totalTaxes",
+			"fill": "user",
+			"default": 0,
+			"description": "Approximate total municipal taxes as a percentage (pTotTribMun), per Lei 12.741/2012. Required when sending percentages instead of amounts."
+		},
+		"infDPS.valores.trib.totTrib.indTotTrib": {
+			"ptName": "valores.trib.totTrib.indTotTrib",
+			"displayName": "Show Estimated Taxes",
+			"name": "showEstimatedTaxes",
+			"type": "options",
+			"required": false,
+			"section": "totalTaxes",
+			"fill": "user",
+			"default": 0,
+			"description": "Whether estimated total taxes are stated on the invoice (indTotTrib).",
+			"options": [
+				{
+					"value": 0,
+					"label": "Do not state estimated taxes"
+				}
+			],
+			"optionsPendentes": "P-06 — valor 0 observado. Confirmar o conjunto completo.",
+			"nota": "O bloco TotTrib inteiro é obrigatório, ao contrário do que 'required: false' sugere: sem ele a API devolve 400 ValidationFailed / ValueRequired — \"O campo 'InfDPS.Valores.Trib.TotTrib' é obrigatório\" (observado em 24/08/2026). Enviar indTotTrib = 0 satisfaz o requisito sem declarar valores. Rever se a seção 'totalTaxes' deve continuar atrás de toggle. TotTrib aceita três formas mutuamente exclusivas: vTotTrib (valores), pTotTrib (percentuais) ou indTotTrib = 0. Enviar mais de uma é ambíguo — escolher uma."
+		},
+		"infDPS.IBSCBS.finNFSe": {
+			"ptName": "IBSCBS.finNFSe",
+			"displayName": "Invoice Purpose",
+			"name": "invoicePurpose",
+			"type": "options",
+			"required": false,
+			"section": "ibscbs",
+			"fill": "template",
+			"description": "Purpose of the invoice for the new consumption tax regime (finNFSe).",
+			"optionsPendentes": "P-06"
+		},
+		"infDPS.IBSCBS.indFinal": {
+			"ptName": "IBSCBS.indFinal",
+			"displayName": "End Consumer",
+			"name": "endConsumer",
+			"type": "options",
+			"required": false,
+			"section": "ibscbs",
+			"fill": "template",
+			"description": "Whether the customer is an end consumer (indFinal).",
+			"optionsPendentes": "P-06"
+		},
+		"infDPS.IBSCBS.cIndOp": {
+			"ptName": "IBSCBS.cIndOp",
+			"displayName": "Operation Indicator Code",
+			"name": "operationIndicatorCode",
+			"type": "string",
+			"required": false,
+			"section": "ibscbs",
+			"fill": "template",
+			"description": "Operation indicator code for the new consumption tax regime (cIndOp).",
+			"exemplo": "100501"
+		},
+		"infDPS.IBSCBS.indDest": {
+			"ptName": "IBSCBS.indDest",
+			"displayName": "Recipient Indicator",
+			"name": "recipientIndicator",
+			"type": "options",
+			"required": false,
+			"section": "ibscbs",
+			"fill": "template",
+			"description": "Recipient indicator for the new consumption tax regime (indDest).",
+			"optionsPendentes": "P-06"
+		},
+		"infDPS.IBSCBS.valores.trib.gIBSCBS.CST": {
+			"ptName": "IBSCBS.valores.trib.gIBSCBS.CST",
+			"displayName": "Tax Situation Code",
+			"name": "taxSituationCode",
+			"type": "string",
+			"required": false,
+			"section": "ibscbs",
+			"fill": "template",
+			"description": "Tax situation code for IBS and CBS (CST).",
+			"exemplo": "000"
+		},
+		"infDPS.IBSCBS.valores.trib.gIBSCBS.cClassTrib": {
+			"ptName": "IBSCBS.valores.trib.gIBSCBS.cClassTrib",
+			"displayName": "Tax Classification Code",
+			"name": "taxClassificationCode",
+			"type": "string",
+			"required": false,
+			"section": "ibscbs",
+			"fill": "template",
+			"description": "Tax classification code for IBS and CBS (cClassTrib).",
+			"exemplo": "000001"
+		}
+	},
+	"secoes": {
+		"core": {
+			"displayName": "—",
+			"toggle": false,
+			"nota": "Campos sempre visíveis."
+		},
+		"auto": {
+			"displayName": "—",
+			"toggle": false,
+			"nota": "Preenchidos pelo node, nunca renderizados."
+		},
+		"customer": {
+			"displayName": "Customer",
+			"toggle": false
+		},
+		"service": {
+			"displayName": "Service",
+			"toggle": false
+		},
+		"taxation": {
+			"displayName": "Taxation",
+			"toggle": false
+		},
+		"totalTaxes": {
+			"displayName": "Estimated Taxes",
+			"toggle": true
+		},
+		"ibscbs": {
+			"displayName": "IBS/CBS (Tax Reform)",
+			"toggle": true,
+			"nota": "Opcional hoje; exigido conforme a reforma avança (P-25)."
+		},
+		"provider": {
+			"displayName": "Service Provider",
+			"toggle": false
+		},
+		"cancellation": {
+			"displayName": "Cancellation Fields",
+			"toggle": true,
+			"nota": "Vazio = sem corpo na requisição."
+		}
+	},
+	"resposta": {
+		"nota": "Retorno de POST /nfse/dps. A API é assíncrona: o id vem sempre, imediatamente, e o acompanhamento é feito com ele.",
+		"campos": {
+			"id": {
+				"displayName": "Invoice ID",
+				"description": "ACBr API identifier for the invoice (id), prefixed 'nfs_'. Use it to check status and download files.",
+				"exemplo": "nfs_3a233158c3524323878cb1d0b848ba44"
+			},
+			"created_at": {
+				"displayName": "Created At",
+				"description": "Timestamp when the API accepted the request."
+			},
+			"status": {
+				"displayName": "Status",
+				"description": "Processing status of the invoice.",
+				"valores": [
+					{
+						"value": "processando",
+						"label": "Processing",
+						"terminal": false
+					},
+					{
+						"value": "autorizada",
+						"label": "Authorized",
+						"terminal": true,
+						"resultado": "sucesso"
+					},
+					{
+						"value": "negada",
+						"label": "Denied",
+						"terminal": true,
+						"resultado": "falha",
+						"nota": "Motivo em 'mensagens'."
+					},
+					{
+						"value": "cancelada",
+						"label": "Cancelled",
+						"terminal": true,
+						"resultado": "cancelada"
+					}
+				],
+				"nota": "Regra do laco: prosseguir ENQUANTO status == 'processando'; qualquer outro valor e terminal, com o motivo em 'mensagens'. Whitelist do que continua, nao do que termina — assim um estado desconhecido ou futuro para o laco em vez de fazer girar indefinidamente. Polling por GET /nfse/{id}, nunca por Sincronizar (cobra 1 unidade)."
+			},
+			"numero": {
+				"displayName": "Invoice Number",
+				"description": "Invoice number assigned by the city hall (numero). Only present once authorized.",
+				"exemplo": "36",
+				"nota": "Atribuído somente na autorização — processamento FIFO, sem risco de colisão."
+			},
+			"codigo_verificacao": {
+				"displayName": "Verification Code",
+				"description": "Official verification code of the invoice (codigo_verificacao). Together with the number, this is what your records should store.",
+				"exemplo": "35540032218760540000139000000000003626084121858456"
+			},
+			"link_url": {
+				"displayName": "Public Invoice URL",
+				"description": "Official public page where the invoice can be viewed and verified (link_url).",
+				"nota": "Preferir este link ao PDF em fluxos de notificação — mais leve, é a página oficial, e evita a questão de consumo de crédito no download do PDF (P-05)."
+			},
+			"data_emissao": {
+				"displayName": "Issue Date",
+				"description": "Timestamp when the invoice was authorized (data_emissao)."
+			},
+			"ambiente": {
+				"displayName": "Environment",
+				"description": "Environment the invoice was issued in."
+			},
+			"referencia": {
+				"displayName": "External Reference",
+				"description": "The external reference sent in the request, echoed back. Links the invoice to your own records.",
+				"nota": "Fica vinculada ao id nfs_. É a chave de idempotência."
+			},
+			"DPS": {
+				"displayName": "DPS",
+				"description": "Service declaration data, including the series and number assigned by the API (serie, nDPS). Empty while the invoice is still processing.",
+				"exemplo": {
+					"serie": "20",
+					"nDPS": "2"
+				},
+				"nota": "Confirma que a numeração é injetada pela API a partir da configuração da empresa."
+			},
+			"mensagens": {
+				"displayName": "Messages",
+				"description": "Messages returned by the city hall, including rejection reasons.",
+				"nota": "Surface ao usuário em caso de rejeição — é onde vem o motivo."
+			}
+		}
+	},
+	"erros": {
+		"nota": "De-para das mensagens de erro da API (pt-BR) para o texto exibido ao usuário do node (inglês). Chave: código + trecho identificador da mensagem. Ver P-17.",
+		"referenciaDuplicada": {
+			"httpStatus": 400,
+			"apiCode": "ValidationFailed",
+			"apiMessagePt": "O campo 'referencia' deve ser único",
+			"displayMessage": "An invoice with this external reference was already issued.",
+			"tratamento": "replayIdempotente",
+			"descricaoTratamento": "NÃO propagar como falha. Buscar a nota já emitida por este 'referencia' e devolvê-la como resultado, sinalizando alreadyIssued: true. Propagar o erro faz o usuário reemitir com outro 'referencia' e produz exatamente a duplicata que a restrição impede.",
+			"comoLocalizar": "GET /nfse (ListarNfse) filtrando por cpf_cnpj + ambiente + referencia. O node já tem os dois primeiros.",
+			"coberturaPorEstado": {
+				"processando": "bloqueado",
+				"autorizada": "bloqueado",
+				"cancelada": "bloqueado",
+				"erroDeProcessamento": "liberado — reemissão legítima"
+			},
+			"nota": "Cobre os três estados, incluindo pendente — logo cobre o caso mais comum de retry. Regra correlata: gerar o 'referencia' uma única vez e reusá-lo em toda retentativa, nunca regenerar. A mensagem original vaza o tipo interno 'Nfse.Entities.TNfseEntity'; não repassar ao usuário."
+		},
+		"x999SemHomologacao": {
+			"apiMessagePt": "X999: Erro de Conexão: Não informado a URL de Homologação",
+			"displayMessage": "This city has no staging environment. Switch the credential to production to test with this city.",
+			"tratamento": "mensagemEspecifica",
+			"nota": "Esperado ser comum — poucos dos 102 provedores mantêm homologação (P-16)."
+		},
+		"escopoAusente": {
+			"httpStatus": 403,
+			"displayMessage": "Your credential is missing the '{escopo}' scope. Edit the ACBr API credential and enable it.",
+			"tratamento": "mensagemEspecifica",
+			"descricaoTratamento": "O node conhece o escopo exigido por cada operação, então deve nomeá-lo na mensagem em vez de repassar o 403 cru. Modo de falha criado pela seleção de escopos por checkbox na credencial (P-39).",
+			"mapaOperacaoEscopo": {
+				"nfse": "todas as operações de NFS-e",
+				"empresa": "todas as operações de Empresa",
+				"cnpj": "Consult CNPJ, List Companies by Activity Code",
+				"cep": "Consult Address by Postal Code",
+				"debug": "todas as operações de Debug"
+			}
+		},
+		"creditoInsuficiente": {
+			"httpStatus": 402,
+			"apiCode": "InsufficientCredits",
+			"displayMessage": "Not enough credits in your ACBr API account to issue this invoice.",
+			"tratamento": "mensagemEspecifica",
+			"nota": "402, não 403 — é crédito, não permissão (P-19)."
+		},
+		"cotaExcedida": {
+			"httpStatus": 402,
+			"apiCode": "QuotaExceeded",
+			"displayMessage": "The request exceeds your account quota limit.",
+			"tratamento": "mensagemEspecifica"
+		}
+	},
+	"pendentes": {
+		"nota": "Blocos do payload ainda não mapeados — entram por toggle, e dependem do swagger completo (P-06).",
+		"blocos": [
+			"infDPS.subst — substituição de NFS-e",
+			"infDPS.interm — intermediário do serviço",
+			"infDPS.serv.comExt — exportação de serviço",
+			"infDPS.serv.obra — construção civil",
+			"infDPS.serv.atvEvento — eventos",
+			"infDPS.serv.infoCompl — informações complementares",
+			"infDPS.valores.vDescCondIncond — descontos condicional e incondicional",
+			"infDPS.valores.vDedRed — deduções e reduções (bloco mais profundo do payload)",
+			"infDPS.valores.trib.tribFed — PIS/COFINS e retenções federais",
+			"infDPS.IBSCBS.dest, .imovel, .valores.gReeRepRes, .gIBSCBS.gTribRegular, .gIBSCBS.gDif"
+		]
+	},
+	"cancelamento": {
+		"endpoint": "POST /nfse/{id}/cancelamento",
+		"nota": "Nenhum campo do corpo é obrigatório na API — apenas o 'id' no path. Ambos são exigidos somente por algumas prefeituras. Se o usuário não preencher nada, NÃO enviar corpo. Consumo: 1 unidade por requisição. Cancelar bloqueia o reuso do 'referencia'.",
+		"campos": {
+			"codigo": {
+				"ptName": "codigo",
+				"displayName": "Cancellation Code",
+				"name": "cancellationCode",
+				"type": "string",
+				"required": false,
+				"section": "cancellation",
+				"fill": "user",
+				"description": "Cancellation code, required by some city halls only. Accepted values come from your city hall manual — there is no global list.",
+				"nota": "Sem lista enumerável: é por município, como o resto das exigências locais (P-08). Campo livre, não dropdown."
+			},
+			"motivo": {
+				"ptName": "motivo",
+				"displayName": "Cancellation Reason",
+				"name": "cancellationReason",
+				"type": "string",
+				"required": false,
+				"section": "cancellation",
+				"fill": "user",
+				"description": "Free-text cancellation reason, required by some city halls only."
+			}
+		}
+	}
+}

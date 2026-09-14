@@ -1,0 +1,46 @@
+# Publish to npm with provenance.
+#
+# Since 2026-05-01 n8n only accepts verified nodes published from GitHub
+# Actions with provenance; publishing from a developer machine is not
+# accepted. Provenance proves cryptographically which workflow, repository
+# and commit produced the tarball.
+
+name: publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required for provenance
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - run: npm ci
+
+      # Generate the properties before linting: the node imports
+      # properties.generated.ts, which is not versioned.
+      - run: npm run gen
+
+      - run: npm run lint
+
+      - run: npm run build
+
+      # --access public is required for a scoped package: npm publishes it
+      # as restricted by default.
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

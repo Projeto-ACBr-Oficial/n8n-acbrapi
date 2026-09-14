@@ -1,0 +1,37 @@
+# Local development environment for this node.
+#
+# Mounts only package.json + dist/ into the n8n custom extensions directory.
+# It deliberately does NOT mount the project root: that would expose a
+# host-installed node_modules to the container and break native modules when
+# the host is Windows and the container is Linux.
+#
+# Flow: `npm run build` -> `npm run n8n:restart` -> the node is reloaded.
+
+services:
+  n8n:
+    # Pinned to a patched release. Keep it current; do not go below this patch.
+    image: docker.n8n.io/n8nio/n8n:2.35.4
+    container_name: n8n-acbr-dev
+    restart: unless-stopped
+    ports:
+      - '5678:5678'
+    environment:
+      - N8N_CUSTOM_EXTENSIONS=/home/node/custom
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?set it in .env}
+      - GENERIC_TIMEZONE=America/Sao_Paulo
+      - TZ=America/Sao_Paulo
+      - N8N_SECURE_COOKIE=false
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_LOG_LEVEL=${N8N_LOG_LEVEL:-info}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=${EXECUTIONS_DATA_SAVE_ON_SUCCESS:-all}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./package.json:/home/node/custom/acbr-api/package.json:ro
+      - ./dist:/home/node/custom/acbr-api/dist:ro
+
+volumes:
+  n8n_data:

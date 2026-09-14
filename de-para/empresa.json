@@ -1,0 +1,217 @@
+{
+  "meta": {
+    "versao": "0.1",
+    "data": "2026-08-19",
+    "escopo": "Tag Empresa, subconjunto do v1: cadastro, certificado e configuração de NFS-e. As configurações por serviço dos outros oito DF-e ficam fora do v1.",
+    "objetivo": "Fonte única do de-para pt-BR → inglês para as operações de Empresa. Mesmas convenções de de-para/nfse-dps.json.",
+    "estadoDeConfianca": "PARCIAL. Os campos abaixo vêm de duas fontes de evidência apenas: o exemplo de POST /empresas na documentação e a tela de configuração de NFS-e do console. Os nomes JSON dos campos de regime tributário NÃO foram observados em payload real — estão marcados com nomeJsonPendente. Completar com P-06 (swagger) antes de gerar properties desta parte.",
+    "avisoSeguranca": "A operação de certificado recebe o A1 em Base64 mais a senha. O n8n persiste dados de execução no banco, então esses valores podem ficar gravados no histórico. Ver P-38: senha tipada como 'password', node nunca ecoa este payload em erro, README recomenda o console como caminho padrão."
+  },
+
+  "cadastro": {
+    "endpoint": "POST /empresas · PUT /empresas/{cpf_cnpj}",
+    "campos": {
+      "cpf_cnpj": {
+        "ptName": "cpf_cnpj",
+        "displayName": "Tax ID",
+        "name": "taxId",
+        "type": "string",
+        "required": true,
+        "description": "Company tax ID (cpf_cnpj), digits only."
+      },
+      "nome_razao_social": {
+        "ptName": "nome_razao_social",
+        "displayName": "Legal Name",
+        "name": "legalName",
+        "type": "string",
+        "required": true,
+        "description": "Company legal name (nome_razao_social)."
+      },
+      "inscricao_estadual": {
+        "ptName": "inscricao_estadual",
+        "displayName": "State Tax Registration",
+        "name": "stateTaxRegistration",
+        "type": "string",
+        "required": false,
+        "description": "State tax registration number (inscricao_estadual)."
+      },
+      "inscricao_municipal": {
+        "ptName": "inscricao_municipal",
+        "displayName": "Municipal Tax Registration",
+        "name": "municipalTaxRegistration",
+        "type": "string",
+        "required": false,
+        "description": "Municipal tax registration number (inscricao_municipal). Required by many cities for NFS-e."
+      },
+      "email": {
+        "ptName": "email",
+        "displayName": "Email",
+        "name": "email",
+        "type": "string",
+        "required": false,
+        "description": "Company email address (email)."
+      },
+      "endereco": {
+        "ptName": "endereco",
+        "displayName": "Address",
+        "name": "address",
+        "type": "fixedCollection",
+        "required": true,
+        "description": "Company address (endereco).",
+        "camposPendentes": "P-06 — o exemplo da documentação mostra apenas 'logradouro' e 'numero' antes de truncar. Faltam bairro, município/código IBGE, UF, CEP, complemento. A operação Consult Address by Postal Code do próprio node preenche a maior parte."
+      }
+    }
+  },
+
+  "certificado": {
+    "endpoint": "PUT /empresas/{cpf_cnpj}/certificado · PUT .../certificado/upload",
+    "avisoSeguranca": "Ver meta.avisoSeguranca e P-38.",
+    "campos": {
+      "certificado": {
+        "ptName": "certificado",
+        "displayName": "Certificate (Base64)",
+        "name": "certificate",
+        "type": "string",
+        "required": true,
+        "description": "A1 digital certificate encoded in Base64 (certificado). Prefer uploading it through the ACBr API console — this operation exists for automated onboarding at scale.",
+        "nota": "Nunca ecoar este valor em mensagem de erro. Considerar aceitar binário do workflow e converter, em vez de string."
+      },
+      "password": {
+        "ptName": "password",
+        "displayName": "Certificate Password",
+        "name": "certificatePassword",
+        "type": "string",
+        "required": true,
+        "n8n": { "typeOptions": { "password": true } },
+        "description": "Password of the A1 certificate (password).",
+        "nota": "Tipado como password para o n8n mascarar na UI. Isso não impede a persistência em dados de execução — ver P-38."
+      }
+    }
+  },
+
+  "configuracaoNfse": {
+    "endpoint": "GET/PUT /empresas/{cpf_cnpj}/nfse",
+    "nota": "Campos derivados da tela do console e do exemplo da documentação. Os valores daqui são INJETADOS pela API no DPS — confirmado por 'opSimpNac' e 'regEspTrib' presentes no XML transmitido e ausentes no JSON enviado.",
+    "campos": {
+      "ambiente": {
+        "ptName": "ambiente",
+        "displayName": "Environment",
+        "name": "environment",
+        "type": "options",
+        "required": true,
+        "description": "Environment used for NFS-e issuing (ambiente).",
+        "options": [
+          { "value": "producao", "label": "Production" },
+          { "value": "homologacao", "label": "Staging" }
+        ]
+      },
+      "rps.lote": {
+        "ptName": "rps.lote",
+        "displayName": "Next Batch Number",
+        "name": "nextBatchNumber",
+        "type": "number",
+        "required": true,
+        "description": "Next RPS batch number to be used (rps.lote)."
+      },
+      "rps.serie": {
+        "ptName": "rps.serie",
+        "displayName": "Series",
+        "name": "series",
+        "type": "string",
+        "required": true,
+        "description": "RPS series to be used (rps.serie)."
+      },
+      "rps.numero": {
+        "ptName": "rps.numero",
+        "displayName": "Next Invoice Number",
+        "name": "nextInvoiceNumber",
+        "type": "number",
+        "required": true,
+        "description": "Next RPS number to be used (rps.numero)."
+      },
+      "situacaoSimplesNacional": {
+        "ptName": "Situação Simples Nacional",
+        "displayName": "Simples Nacional Status",
+        "name": "simplesNacionalStatus",
+        "type": "options",
+        "required": false,
+        "description": "Whether the company is enrolled in the Simples Nacional tax regime.",
+        "nomeJsonPendente": "P-06 — rótulo observado na tela do console; nome JSON não confirmado. Provável correspondência no DPS: prest.regTrib.opSimpNac.",
+        "valoresConhecidos": [{ "label": "1 - Não optante" }],
+        "optionsPendentes": "P-06"
+      },
+      "regimeEspecialTributacao": {
+        "ptName": "Regime Especial de Tributação",
+        "displayName": "Special Tax Regime",
+        "name": "specialTaxRegime",
+        "type": "options",
+        "required": false,
+        "description": "Special municipal tax regime applied to the company.",
+        "nomeJsonPendente": "P-06 — provável correspondência no DPS: prest.regTrib.regEspTrib.",
+        "valoresConhecidos": [{ "label": "0 - Nenhum" }],
+        "optionsPendentes": "P-06"
+      },
+      "regimeApuracaoSimplesNacional": {
+        "ptName": "Regime de Apuração - Simples Nacional (ME/EPP)",
+        "displayName": "Simples Nacional Assessment Regime",
+        "name": "simplesNacionalAssessmentRegime",
+        "type": "options",
+        "required": false,
+        "description": "Assessment regime for companies under Simples Nacional (ME/EPP).",
+        "nomeJsonPendente": "P-06",
+        "optionsPendentes": "P-06"
+      },
+      "incentivoFiscal": {
+        "ptName": "Empresa possui incentivo fiscal",
+        "displayName": "Has Tax Incentive",
+        "name": "hasTaxIncentive",
+        "type": "boolean",
+        "required": false,
+        "default": false,
+        "description": "Whether the company holds a municipal tax incentive.",
+        "nomeJsonPendente": "P-06"
+      },
+      "prefeitura.login": {
+        "ptName": "Login",
+        "displayName": "City Hall Login",
+        "name": "cityHallLogin",
+        "type": "string",
+        "required": false,
+        "description": "Login required by some city halls for direct communication.",
+        "nomeJsonPendente": "P-06",
+        "nota": "Se o município exige e não está configurado, a emissão falha — ver P-29."
+      },
+      "prefeitura.senha": {
+        "ptName": "Senha",
+        "displayName": "City Hall Password",
+        "name": "cityHallPassword",
+        "type": "string",
+        "required": false,
+        "n8n": { "typeOptions": { "password": true } },
+        "description": "Password required by some city halls for direct communication.",
+        "nomeJsonPendente": "P-06"
+      },
+      "prefeitura.token": {
+        "ptName": "Token",
+        "displayName": "City Hall Token",
+        "name": "cityHallToken",
+        "type": "string",
+        "required": false,
+        "n8n": { "typeOptions": { "password": true } },
+        "description": "Token required by some city halls for direct communication.",
+        "nomeJsonPendente": "P-06"
+      }
+    }
+  },
+
+  "pendentes": {
+    "nota": "Operações da tag Empresa no v1 cujos payloads ainda não foram mapeados.",
+    "itens": [
+      "GET /empresas — parâmetros de listagem e paginação",
+      "GET /empresas/certificados — formato do retorno",
+      "PUT /empresas/{cpf_cnpj}/certificado/upload — multipart, definir se o node aceita binário do workflow",
+      "PUT/GET/DELETE /empresas/{cpf_cnpj}/logotipo — formato e limites de imagem",
+      "Retorno de GET /empresas/{cpf_cnpj} e GET /empresas/{cpf_cnpj}/nfse"
+    ]
+  }
+}
