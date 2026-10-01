@@ -24,13 +24,11 @@ const BASE_URL: Record<string, string> = {
 	homologacao: 'https://hom.acbr.api.br',
 };
 
-/** Identificação do conector no campo fiscal verAplic. Curto por limite de tamanho (P-33). */
-const VER_APLIC = 'n8n-acbrapi/1.0.2';
+const APPLICATION_VERSION = 'n8n-acbrapi/1.0.3';
 
-/** Único status não terminal. Whitelist do que continua, não do que termina. */
-const STATUS_EM_ANDAMENTO = 'processando';
+const STATUS_IN_PROGRESS = 'processando';
 
-const ESCOPO_POR_RECURSO: Record<string, string> = {
+const SCOPE_BY_RESOURCE: Record<string, string> = {
 	nfse: 'nfse',
 	empresa: 'empresa',
 	cnpj: 'cnpj',
@@ -38,15 +36,25 @@ const ESCOPO_POR_RECURSO: Record<string, string> = {
 	debug: 'debug',
 };
 
-function setByPath(alvo: IDataObject, caminho: string, valor: unknown): void {
-	if (valor === undefined || valor === null || valor === '') return;
-	const partes = caminho.split('.');
-	let atual: IDataObject = alvo;
-	for (const parte of partes.slice(0, -1)) {
-		if (typeof atual[parte] !== 'object' || atual[parte] === null) atual[parte] = {};
-		atual = atual[parte] as IDataObject;
+/**
+ * Writes a value into a nested object, creating the intermediate levels.
+ *
+ * Empty values are skipped so that optional parameters left blank never reach
+ * the payload.
+ *
+ * @param target Object to write into.
+ * @param path Dot-separated path, as used by NFSE_PATHS.
+ * @param value Value to set; undefined, null and '' are ignored.
+ */
+function setByPath(target: IDataObject, path: string, value: unknown): void {
+	if (value === undefined || value === null || value === '') return;
+	const parts = path.split('.');
+	let current: IDataObject = target;
+	for (const part of parts.slice(0, -1)) {
+		if (typeof current[part] !== 'object' || current[part] === null) current[part] = {};
+		current = current[part] as IDataObject;
 	}
-	atual[partes[partes.length - 1]] = valor as IDataObject[string];
+	current[parts[parts.length - 1]] = value as IDataObject[string];
 }
 
 export class AcbrApi implements INodeType {
@@ -58,8 +66,7 @@ export class AcbrApi implements INodeType {
 		version: 1,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
 		description: 'Issue Brazilian service invoices (NFS-e) and look up companies and addresses',
-		defaults: { name: 'ACBr API' },
-		// Permite que um AI Agent chame estas operações como ferramentas (P-26).
+		defaults: { name: 'ACBr API' },		
 		usableAsTool: true,
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
@@ -70,22 +77,14 @@ export class AcbrApi implements INodeType {
 				name: 'resource',
 				type: 'options',
 				noDataExpression: true,
-				default: 'nfse',
-				// Ordem alfabética por 'name' e sem o acrônimo hifenizado "NFS-e" nos
-				// rótulos: a regra de title case do linter o converte em "NFS-E".
-				// O termo correto fica nas descrições, que a regra não altera.
-				//
-				// Company e Debug estão implementados apenas em parte e ficam FORA
-				// do enum no 1.0: a UI não deve prometer operação que lança erro.
-				// As properties e o roteamento dos dois continuam abaixo, inertes,
-				// e voltam ao enum quando as operações existirem (1.1).
+				default: 'nfse',				
 				options: [
 					{ name: 'CNPJ', value: 'cnpj' },
 					{ name: 'Postal Code', value: 'cep' },
 					{
 						name: 'Service Invoice',
 						value: 'nfse',
-						description: 'Nota Fiscal de Serviço eletrônica (NFS-e)',
+						description: 'Brazilian electronic service invoice (NFS-e)',
 					},
 				],
 			},
@@ -298,14 +297,7 @@ export class AcbrApi implements INodeType {
 				noDataExpression: true,
 				default: 'get',
 				displayOptions: { show: { resource: ['cnpj'] } },
-				options: [
-					{ name: 'Get', value: 'get', action: 'Get company data by CNPJ' },
-					{
-						name: 'Get Many',
-						value: 'getAll',
-						action: 'Get many companies by activity code',
-					},
-				],
+				options: [{ name: 'Get', value: 'get', action: 'Get company data by CNPJ' }],
 			},
 			{
 				displayName: 'CNPJ',
@@ -385,29 +377,27 @@ export class AcbrApi implements INodeType {
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
-		const retorno: INodeExecutionData[] = [];
+		const output: INodeExecutionData[] = [];
 
-		const credencial = await this.getCredentials('acbrApiOAuth2Api');
-		// A credential define apenas o HOST. O ambiente fiscal do documento vem
-		// por parâmetro, porque uma credential atende N empresas (ver de-para).
-		const ambiente = (credencial.environment as string) ?? 'homologacao';
-		const baseUrl = BASE_URL[ambiente];
+		const credentials = await this.getCredentials('acbrApiOAuth2Api');
+		const environment = (credentials.environment as string) ?? 'homologacao';
+		const baseUrl = BASE_URL[environment];
 		if (!baseUrl) {
-			throw new NodeOperationError(this.getNode(), `Unknown environment: ${ambiente}`);
+			throw new NodeOperationError(this.getNode(), `Unknown environment: ${environment}`);
 		}
 
-		const escopos = (credencial.scopes as string[]) ?? [];
+		const scopes = (credentials.scopes as string[]) ?? [];
 
-		const requisicao = async (
+		const request = async (
 			method: IHttpRequestMethods,
-			caminho: string,
-			opcoes: Partial<IHttpRequestOptions> = {},
+			path: string,
+			extraOptions: Partial<IHttpRequestOptions> = {},
 		): Promise<IDataObject> => {
 			const options: IHttpRequestOptions = {
 				method,
-				url: `${baseUrl}${caminho}`,
+				url: `${baseUrl}${path}`,
 				json: true,
-				...opcoes,
+				...extraOptions,
 			};
 			try {
 				return (await this.helpers.httpRequestWithAuthentication.call(
@@ -415,50 +405,42 @@ export class AcbrApi implements INodeType {
 					'acbrApiOAuth2Api',
 					options,
 				)) as IDataObject;
-			} catch (erro) {
-				// O n8n expõe apenas o texto genérico do status. Registra o corpo
-				// enviado e a forma bruta do erro, que é onde a API diz o motivo.
+			} catch (error) {
 				this.logger.error(
-					`ACBr API ${method} ${caminho} falhou
-  corpo enviado: ${JSON.stringify(opcoes.body ?? null)}
-  erro: ${descreverErro(erro)}`,
+					`ACBr API ${method} ${path} falhou body enviado: ${JSON.stringify(extraOptions.body ?? null)} error: ${describeError(error)}`,
 				);
-				// Traduz aqui, na origem: a partir deste ponto todo erro que circula
-				// já é NodeOperationError ou NodeApiError, nunca a forma crua.
-				throw traduzirErro.call(this, erro);
+				throw translateError.call(this, error);
 			}
 		};
-
-		/** Baixa arquivo e devolve o item já com o binário anexado. */
-		const baixarArquivo = async (
-			caminho: string,
-			nomeArquivo: string,
-			mimeTypePadrao: string,
+		const downloadFile = async (
+			path: string,
+			fileName: string,
+			defaultMimeType: string,
 			i: number,
 		): Promise<INodeExecutionData> => {
-			const campo = this.getNodeParameter('binaryPropertyName', i) as string;
-			const resposta = (await this.helpers.httpRequestWithAuthentication.call(
+			const field = this.getNodeParameter('binaryPropertyName', i) as string;
+			const response = (await this.helpers.httpRequestWithAuthentication.call(
 				this,
 				'acbrApiOAuth2Api',
 				{
 					method: 'GET',
-					url: `${baseUrl}${caminho}`,
+					url: `${baseUrl}${path}`,
 					json: false,
 					encoding: 'arraybuffer',
 					returnFullResponse: true,
 				},
 			)) as { body: Buffer; headers: Record<string, string> };
 
-			const mimeType = resposta.headers?.['content-type']?.split(';')[0] ?? mimeTypePadrao;
-			const binario = await this.helpers.prepareBinaryData(
-				Buffer.from(resposta.body),
-				nomeArquivo,
+			const mimeType = response.headers?.['content-type']?.split(';')[0] ?? defaultMimeType;
+			const binary = await this.helpers.prepareBinaryData(
+				Buffer.from(response.body),
+				fileName,
 				mimeType,
 			);
 
 			return {
-				json: { fileName: nomeArquivo, mimeType, size: binario.fileSize },
-				binary: { [campo]: binario },
+				json: { fileName: fileName, mimeType, size: binary.fileSize },
+				binary: { [field]: binary },
 				pairedItem: { item: i },
 			};
 		};
@@ -467,29 +449,26 @@ export class AcbrApi implements INodeType {
 			const resource = this.getNodeParameter('resource', i) as string;
 			const operation = this.getNodeParameter('operation', i) as string;
 
-			// A credencial permite desmarcar escopos (P-39). Falhar aqui, nomeando a
-			// caixa, é muito mais útil que repassar o 403 cru da API.
-			const escopoNecessario = ESCOPO_POR_RECURSO[resource];
-			if (escopoNecessario && escopos.length > 0 && !escopos.includes(escopoNecessario)) {
+			const requiredScope = SCOPE_BY_RESOURCE[resource];
+			if (requiredScope && scopes.length > 0 && !scopes.includes(requiredScope)) {
 				throw new NodeOperationError(
 					this.getNode(),
-					`Your credential is missing the '${escopoNecessario}' scope`,
+					`Your credential is missing the '${requiredScope}' scope`,
 					{
-						description: `Edit the ACBr API credential and enable '${escopoNecessario}' under Scopes.`,
+						description: `Edit the ACBr API credential and enable '${requiredScope}' under Scopes.`,
 						itemIndex: i,
 					},
 				);
 			}
 
 			try {
-				let resultado: IDataObject | IDataObject[] | undefined;
+				let result: IDataObject | IDataObject[] | undefined;
 
-				// Operações que devolvem arquivo saem por aqui, com binário anexado.
 				if (resource === 'nfse' && (operation === 'downloadPdf' || operation === 'downloadXml')) {
 					const id = this.getNodeParameter('invoiceId', i) as string;
 					const pdf = operation === 'downloadPdf';
-					retorno.push(
-						await baixarArquivo(
+					output.push(
+						await downloadFile(
 							`/nfse/${id}/${pdf ? 'pdf' : 'xml'}`,
 							`${id}.${pdf ? 'pdf' : 'xml'}`,
 							pdf ? 'application/pdf' : 'application/xml',
@@ -501,76 +480,65 @@ export class AcbrApi implements INodeType {
 
 				if (resource === 'cep' && operation === 'get') {
 					const cep = (this.getNodeParameter('cep', i) as string).replace(/\D/g, '');
-					resultado = await requisicao('GET', `/cep/${cep}`);
+					result = await request('GET', `/cep/${cep}`);
 				} else if (resource === 'cnpj' && operation === 'get') {
 					const cnpj = (this.getNodeParameter('cnpj', i) as string).replace(/\D/g, '');
-					resultado = await requisicao('GET', `/cnpj/${cnpj}`);
+					result = await request('GET', `/cnpj/${cnpj}`);
 				} else if (resource === 'nfse' && (operation === 'create' || operation === 'preview')) {
-					const corpo = montarPayloadNfse.call(this, i);
+					const body = buildInvoicePayload.call(this, i);
 
-					// A credencial escolhe o HOST e o campo Environment vai dentro do
-					// documento. Divergindo, o DPS sai com um tpAmb que não é o do host
-					// — falha longe daqui, com mensagem do município. Barra antes.
-					if (corpo.ambiente !== ambiente) {
+					if (body.ambiente !== environment) {
 						throw new NodeOperationError(
 							this.getNode(),
 							'The Environment of this operation does not match the environment of the credential',
 							{
-								description: `The credential points at ${ambiente}, the operation is set to ${String(corpo.ambiente)}. Credentials are issued per environment and are not interchangeable — set both to the same value.`,
+								description: `The credential points at ${environment}, the operation is set to ${String(body.ambiente)}. Credentials are issued per environment and are not interchangeable — set both to the same value.`,
 								itemIndex: i,
 							},
 						);
 					}
 
 					if (operation === 'preview') {
-						// Conferência local: nenhuma chamada de rede, nenhum crédito, nenhuma
-						// nota. Não mostra o ISS — quem calcula é o município.
-						resultado = { preview: true, payload: corpo };
+						result = { preview: true, payload: body };
 					} else {
-						resultado = await emitirComReplay.call(this, requisicao, corpo);
+						result = await issueWithReplay.call(this, request, body);
 
-						const aguardar = this.getNodeParameter('waitForAuthorization', i, false) as boolean;
-						if (aguardar && resultado.status === STATUS_EM_ANDAMENTO) {
+						const wait = this.getNodeParameter('waitForAuthorization', i, false) as boolean;
+						if (wait && result.status === STATUS_IN_PROGRESS) {
 							const timeout = this.getNodeParameter('waitTimeout', i, 120) as number;
-							resultado = await aguardarConclusao.call(this, requisicao, resultado, timeout);
+							result = await waitForCompletion.call(this, request, result, timeout);
 						}
 					}
 				} else if (resource === 'nfse' && operation === 'get') {
 					const id = this.getNodeParameter('invoiceId', i) as string;
-					resultado = await requisicao('GET', `/nfse/${id}`);
+					result = await request('GET', `/nfse/${id}`);
 				} else if (resource === 'nfse' && operation === 'sync') {
-					// Cobra 1 unidade por requisição. Operação explícita de propósito —
-					// o acompanhamento normal usa Get, que é gratuito.
 					const id = this.getNodeParameter('invoiceId', i) as string;
-					resultado = await requisicao('POST', `/nfse/${id}/sincronizar`);
+					result = await request('POST', `/nfse/${id}/sincronizar`);
 				} else if (resource === 'nfse' && operation === 'cancel') {
 					const id = this.getNodeParameter('invoiceId', i) as string;
-					// Nenhum campo do corpo é obrigatório — só algumas prefeituras exigem.
-					// Collection vazia significa requisição sem corpo.
-					const informados = this.getNodeParameter('nfseCancellation', i, {}) as IDataObject;
-					const corpo: IDataObject = {};
-					for (const [nomeParametro, campo] of Object.entries(NFSE_CANCEL_PATHS)) {
-						const valor = informados[nomeParametro];
-						if (valor !== undefined && valor !== '') corpo[campo] = valor;
+					const provided = this.getNodeParameter('nfseCancellation', i, {}) as IDataObject;
+					const body: IDataObject = {};
+					for (const [parameterName, field] of Object.entries(NFSE_CANCEL_PATHS)) {
+						const value = provided[parameterName];
+						if (value !== undefined && value !== '') body[field] = value;
 					}
-					const opcoes: Partial<IHttpRequestOptions> =
-						Object.keys(corpo).length > 0 ? { body: corpo } : {};
-					resultado = await requisicao('POST', `/nfse/${id}/cancelamento`, opcoes);
+					const extraOptions: Partial<IHttpRequestOptions> =
+						Object.keys(body).length > 0 ? { body: body } : {};
+					result = await request('POST', `/nfse/${id}/cancelamento`, extraOptions);
 				} else if (resource === 'nfse' && operation === 'getCancellation') {
 					const id = this.getNodeParameter('invoiceId', i) as string;
-					resultado = await requisicao('GET', `/nfse/${id}/cancelamento`);
+					result = await request('GET', `/nfse/${id}/cancelamento`);
 				} else if (resource === 'nfse' && operation === 'getAll') {
-					// ListarNfse exige cpf_cnpj e ambiente. O CNPJ é por execução: um
-					// tenant de software house lista as notas de cada empresa atendida.
 					const cpfCnpj = (this.getNodeParameter('listProviderTaxId', i) as string).replace(
 						/\D/g,
 						'',
 					);
-					const referencia = this.getNodeParameter('listReference', i, '') as string;
-					const qs: IDataObject = { cpf_cnpj: cpfCnpj, ambiente };
-					if (referencia) qs.referencia = referencia;
-					const lista = await requisicao('GET', '/nfse', { qs });
-					resultado = (lista.data as IDataObject[] | undefined) ?? [];
+					const reference = this.getNodeParameter('listReference', i, '') as string;
+					const qs: IDataObject = { cpf_cnpj: cpfCnpj, ambiente: environment };
+					if (reference) qs.reference = reference;
+					const list = await request('GET', '/nfse', { qs });
+					result = (list.data as IDataObject[] | undefined) ?? [];
 				} else {
 					throw new NodeOperationError(
 						this.getNode(),
@@ -583,240 +551,281 @@ export class AcbrApi implements INodeType {
 					);
 				}
 
-				const saida = Array.isArray(resultado) ? resultado : [resultado ?? {}];
-				retorno.push(
-					...saida.map((json) => ({ json, pairedItem: { item: i } }) as INodeExecutionData),
+				const entries = Array.isArray(result) ? result : [result ?? {}];
+				output.push(
+					...entries.map((json) => ({ json, pairedItem: { item: i } }) as INodeExecutionData),
 				);
-			} catch (erro) {
+			} catch (error) {
 				if (this.continueOnFail()) {
-					retorno.push({ json: { error: (erro as Error).message }, pairedItem: { item: i } });
+					output.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
 					continue;
 				}
-				throw traduzirErro.call(this, erro);
+				throw translateError.call(this, error);
 			}
 		}
 
-		return [retorno];
+		return [output];
 	}
 }
 
-/** Monta o corpo do DPS a partir do FIELD_PATHS — sem código por campo. */
-function montarPayloadNfse(this: IExecuteFunctions, i: number): IDataObject {
-	const corpo: IDataObject = {};
+/**
+ * Builds the service declaration (DPS) body from the node parameters.
+ *
+ * The mapping between parameter and JSON path lives in NFSE_PATHS, generated
+ * from de-para/, so no field is hand-coded here. Seven keys live inside the
+ * Estimated Taxes and IBS/CBS collections rather than at the top level, and n8n
+ * discards anything outside the schema, so they are read from the collections
+ * first.
+ *
+ * Fields the node fills in itself are not exposed: the provider, the coded
+ * environment and the application version. The issue date defaults to now.
+ *
+ * @param i Index of the item being processed.
+ * @returns The request body for POST /nfse/dps.
+ */
+function buildInvoicePayload(this: IExecuteFunctions, i: number): IDataObject {
+	const body: IDataObject = {};
 
-	// Sete chaves do NFSE_PATHS não existem como parâmetro de topo: vivem dentro
-	// das collections nfseTotalTaxes e nfseIbscbs. O n8n descarta qualquer chave
-	// fora do schema, então não há como supri-las pelo JSON do workflow — tem de
-	// ser lido daqui. Mesmo padrão já usado em nfseCancellation.
-	const deCollection: IDataObject = {
+	const fromCollections: IDataObject = {
 		...(this.getNodeParameter('nfseTotalTaxes', i, {}) as IDataObject),
 		...(this.getNodeParameter('nfseIbscbs', i, {}) as IDataObject),
 	};
 
-	for (const [nomeParametro, caminho] of Object.entries(NFSE_PATHS)) {
-		// Fallback '' e não undefined: undefined faz o n8n lançar
-		// "Could not get parameter" em todo opcional que o usuário não preencheu.
-		const valor =
-			nomeParametro in deCollection
-				? deCollection[nomeParametro]
-				: this.getNodeParameter(nomeParametro, i, '');
-		setByPath(corpo, caminho, valor);
+	for (const [parameterName, path] of Object.entries(NFSE_PATHS)) {
+		const value =
+			parameterName in fromCollections
+				? fromCollections[parameterName]
+				: this.getNodeParameter(parameterName, i, '');
+		setByPath(body, path, value);
 	}
 
-	// Preenchidos pelo node, nunca expostos.
-	setByPath(corpo, 'provedor', 'nacional');
+	setByPath(body, 'provedor', 'nacional');
 
-	// tpAmb é a forma codificada do 'ambiente' que o chamador informou — o node
-	// transcreve, não decide. O valor vem do parâmetro via NFSE_PATHS.
-	setByPath(corpo, 'infDPS.tpAmb', corpo.ambiente === 'producao' ? 1 : 2);
-	setByPath(corpo, 'infDPS.verAplic', VER_APLIC);
-	if (!(corpo.infDPS as IDataObject)?.dhEmi) {
-		setByPath(corpo, 'infDPS.dhEmi', new Date().toISOString());
+	setByPath(body, 'infDPS.tpAmb', body.ambiente === 'producao' ? 1 : 2);
+	setByPath(body, 'infDPS.verAplic', APPLICATION_VERSION);
+	if (!(body.infDPS as IDataObject)?.dhEmi) {
+		setByPath(body, 'infDPS.dhEmi', new Date().toISOString());
 	}
 
-	return corpo;
+	return body;
 }
 
 /**
- * Emite tratando o 400 de referência duplicada como replay, não como falha.
+ * Issues an invoice, treating a duplicate reference as a replay, not a failure.
  *
- * Propagar esse erro faz o usuário reemitir com outra referência e produz
- * exatamente a duplicata que a restrição da API impede.
+ * The API enforces uniqueness on the external reference. When a request was
+ * processed but its response was lost, retrying returns HTTP 400. Propagating
+ * that error makes the caller reissue under a new reference and produces
+ * exactly the duplicate the constraint exists to prevent, so the invoice that
+ * already exists is fetched and returned flagged instead.
+ *
+ * @param request Authenticated HTTP helper bound to the selected environment.
+ * @param body The declaration body to submit.
+ * @returns The issued invoice, or the pre-existing one with alreadyIssued set.
  */
-async function emitirComReplay(
+async function issueWithReplay(
 	this: IExecuteFunctions,
-	requisicao: (
+	request: (
 		method: IHttpRequestMethods,
-		caminho: string,
-		opcoes?: Partial<IHttpRequestOptions>,
+		path: string,
+		extraOptions?: Partial<IHttpRequestOptions>,
 	) => Promise<IDataObject>,
-	corpo: IDataObject,
+	body: IDataObject,
 ): Promise<IDataObject> {
 	try {
-		return await requisicao('POST', '/nfse/dps', { body: corpo });
-	} catch (erro) {
-		// `requisicao` já devolve erro de node; isto é só a garantia de tipo.
-		const falha = comoErroDeNode.call(this, erro);
-		if (!eReferenciaDuplicada(erro)) throw falha;
+		return await request('POST', '/nfse/dps', { body: body });
+	} catch (error) {
+		const failure = toNodeError.call(this, error);
+		if (!isDuplicateReference(error)) throw failure;
 
-		const referencia = corpo.referencia as string | undefined;
-		const cpfCnpj = ((corpo.infDPS as IDataObject)?.prest as IDataObject)?.CNPJ as string;
-		if (!referencia) throw falha;
+		const reference = body.referencia as string | undefined;
+		const cpfCnpj = ((body.infDPS as IDataObject)?.prest as IDataObject)?.CNPJ as string;
+		if (!reference) throw failure;
 
-		const lista = await requisicao('GET', '/nfse', {
-			qs: { cpf_cnpj: cpfCnpj, ambiente: corpo.ambiente as string, referencia },
+		const list = await request('GET', '/nfse', {
+			qs: { cpf_cnpj: cpfCnpj, ambiente: body.ambiente as string, referencia: reference },
 		});
-		const existente = (lista.data as IDataObject[] | undefined)?.[0];
-		if (!existente) throw falha;
+		const existing = (list.data as IDataObject[] | undefined)?.[0];
+		if (!existing) throw failure;
 
 		this.logger.info(
-			`ACBr API: reference '${referencia}' already used; returning the existing invoice instead of issuing a new one.`,
+			`ACBr API: reference '${reference}' already used; returning the existing invoice instead of issuing a new one.`,
 		);
-		return { ...existente, alreadyIssued: true };
+		return { ...existing, alreadyIssued: true };
 	}
-}
-
-async function aguardarConclusao(
-	this: IExecuteFunctions,
-	requisicao: (
-		method: IHttpRequestMethods,
-		caminho: string,
-		opcoes?: Partial<IHttpRequestOptions>,
-	) => Promise<IDataObject>,
-	nota: IDataObject,
-	timeoutSegundos: number,
-): Promise<IDataObject> {
-	const id = nota.id as string;
-	const limite = Date.now() + timeoutSegundos * 1000;
-	let atual = nota;
-
-	while (atual.status === STATUS_EM_ANDAMENTO && Date.now() < limite) {
-		await sleep(5000);
-		// Consultar não tem consumo documentado; Sincronizar cobra 1 unidade por
-		// requisição e por isso nunca é usado em laço.
-		atual = await requisicao('GET', `/nfse/${id}`);
-	}
-
-	if (atual.status === STATUS_EM_ANDAMENTO) {
-		atual.timedOut = true;
-		this.logger.warn(
-			`ACBr API: invoice ${id} was still processing after ${timeoutSegundos}s. It may still be authorized later — check it with the Get operation.`,
-		);
-	}
-
-	return atual;
 }
 
 /**
- * O erro chega aqui já traduzido por `traduzirErro`, então a mensagem é o texto
- * em inglês do de-para e a frase original da API vive na `description`. Procura
- * nas duas: o trecho em pt-BR é específico o bastante para identificar sozinho,
- * e depender do status 400 deixou de ser possível — NodeOperationError não
- * carrega httpCode.
+ * Polls an invoice until the city hall authorizes it or the timeout expires.
+ *
+ * Polling uses Get, which is free; Sync charges one credit per call and is
+ * never used in a loop. A timed-out invoice is returned flagged rather than
+ * raised, because it may still be authorized later.
+ *
+ * @param request Authenticated HTTP helper bound to the selected environment.
+ * @param invoice The invoice as returned by the issue call.
+ * @param timeoutSeconds How long to keep checking before giving up.
+ * @returns The last state read, with timedOut set if it never settled.
  */
-function eReferenciaDuplicada(erro: unknown): boolean {
-	const e = erro as { message?: string; description?: string };
+async function waitForCompletion(
+	this: IExecuteFunctions,
+	request: (
+		method: IHttpRequestMethods,
+		path: string,
+		extraOptions?: Partial<IHttpRequestOptions>,
+	) => Promise<IDataObject>,
+	invoice: IDataObject,
+	timeoutSeconds: number,
+): Promise<IDataObject> {
+	const id = invoice.id as string;
+	const deadline = Date.now() + timeoutSeconds * 1000;
+	let current = invoice;
+
+	while (current.status === STATUS_IN_PROGRESS && Date.now() < deadline) {
+		await sleep(5000);
+		current = await request('GET', `/nfse/${id}`);
+	}
+
+	if (current.status === STATUS_IN_PROGRESS) {
+		current.timedOut = true;
+		this.logger.warn(
+			`ACBr API: invoice ${id} was still processing after ${timeoutSeconds}s. It may still be authorized later — check it with the Get operation.`,
+		);
+	}
+
+	return current;
+}
+
+/**
+ * Detects the duplicate-reference rejection on an already translated error.
+ *
+ * By the time an error reaches here it carries the mapped English message and
+ * the API's original Portuguese sentence in the description, so both are
+ * searched. The HTTP status is not available: NodeOperationError does not
+ * carry one.
+ *
+ * @param error The error thrown by the request helper.
+ */
+function isDuplicateReference(error: unknown): boolean {
+	const e = error as { message?: string; description?: string };
 	const { apiMessagePt, displayMessage } = ERROR_MAP.referenciaDuplicada;
 	const texto = `${e.message ?? ''} ${e.description ?? ''}`;
 	return texto.includes(apiMessagePt) || texto.includes(displayMessage);
 }
 
-/** Garantia de tipo: o que sai daqui é sempre erro de node, nunca forma crua. */
-function comoErroDeNode(this: IExecuteFunctions, erro: unknown): Error {
-	if (erro instanceof NodeApiError || erro instanceof NodeOperationError) return erro;
-	return new NodeApiError(this.getNode(), erro as JsonObject);
+/**
+ * Guarantees a node error: wraps anything that is not already one.
+ *
+ * @param error The value caught.
+ */
+function toNodeError(this: IExecuteFunctions, error: unknown): Error {
+	if (error instanceof NodeApiError || error instanceof NodeOperationError) return error;
+	return new NodeApiError(this.getNode(), error as JsonObject);
 }
 
-/** Substitui a mensagem crua da API pelo texto mapeado no de-para (P-17). */
 /**
- * Extrai o corpo da resposta de erro da API.
+ * Renders an error's real shape for the log.
  *
- * O n8n põe em 'message' apenas o texto genérico do status ("Bad request -
- * please check your parameters"). O motivo real — qual campo o município
- * recusou — vem no corpo, e sem isto o usuário fica sem nada acionável.
+ * n8n surfaces only the generic status text, so the keys, the nested cause and
+ * the response body are dumped to make a rejection diagnosable.
+ *
+ * @param error The value caught.
  */
-/** Dump de diagnóstico: revela a forma real do erro para os logs. */
-function descreverErro(erro: unknown): string {
-	const e = (erro ?? {}) as Record<string, unknown>;
-	const partes: string[] = [`keys=[${Object.keys(e).join(',')}]`];
+function describeError(error: unknown): string {
+	const e = (error ?? {}) as Record<string, unknown>;
+	const parts: string[] = [`keys=[${Object.keys(e).join(',')}]`];
 
-	for (const chave of ['message', 'httpCode', 'statusCode', 'description', 'error']) {
-		const valor = e[chave];
-		if (valor === undefined) continue;
-		partes.push(`${chave}=${typeof valor === 'object' ? JSON.stringify(valor) : String(valor)}`);
+	for (const key of ['message', 'httpCode', 'statusCode', 'description', 'error']) {
+		const value = e[key];
+		if (value === undefined) continue;
+		parts.push(`${key}=${typeof value === 'object' ? JSON.stringify(value) : String(value)}`);
 	}
 
-	const causa = e.cause as Record<string, unknown> | undefined;
-	if (causa) partes.push(`causeKeys=[${Object.keys(causa).join(',')}]`);
+	const cause = e.cause as Record<string, unknown> | undefined;
+	if (cause) parts.push(`causeKeys=[${Object.keys(cause).join(',')}]`);
 
-	const resposta = (e.response ?? causa?.response) as
+	const response = (e.response ?? cause?.response) as
 		| { status?: unknown; body?: unknown; data?: unknown }
 		| undefined;
-	if (resposta) {
-		partes.push(
+	if (response) {
+		parts.push(
 			`response=${JSON.stringify({
-				status: resposta.status,
-				body: resposta.body,
-				data: resposta.data,
+				status: response.status,
+				body: response.body,
+				data: response.data,
 			})}`,
 		);
 	}
 
-	return partes.join("\n    ");
+	return parts.join('\n    ');
 }
 
-function detalheDaApi(erro: unknown): string {
-	const corpoDe = (o: unknown): unknown => {
-		const alvo = o as { body?: unknown; data?: unknown } | undefined;
-		return alvo?.body ?? alvo?.data;
+/**
+ * Extracts the reason the API gave, from wherever it ended up.
+ *
+ * The body travels in a different place depending on how the request failed,
+ * so the known positions are tried in order.
+ *
+ * @param error The value caught.
+ * @returns The API's own explanation, or an empty string.
+ */
+function apiErrorDetail(error: unknown): string {
+	const bodyOf = (o: unknown): unknown => {
+		const target = o as { body?: unknown; data?: unknown } | undefined;
+		return target?.body ?? target?.data;
 	};
-	const raiz = erro as
+	const root = error as
 		| { response?: unknown; cause?: { response?: unknown }; error?: unknown; description?: unknown }
 		| undefined;
 
-	const candidatos: unknown[] = [
-		corpoDe(raiz?.response),
-		corpoDe(raiz?.cause?.response),
-		raiz?.error,
-		raiz?.description,
+	const candidates: unknown[] = [
+		bodyOf(root?.response),
+		bodyOf(root?.cause?.response),
+		root?.error,
+		root?.description,
 	];
 
-	for (const candidato of candidatos) {
-		if (!candidato) continue;
-		if (typeof candidato === 'string' && candidato.trim()) return candidato.trim();
-		if (typeof candidato === 'object') return JSON.stringify(candidato);
+	for (const candidate of candidates) {
+		if (!candidate) continue;
+		if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+		if (typeof candidate === 'object') return JSON.stringify(candidate);
 	}
 	return '';
 }
 
-function traduzirErro(this: IExecuteFunctions, erro: unknown): Error {
-	// Idempotente: `requisicao` já traduz na origem, e o catch do laço de itens
-	// passa por aqui de novo. Reembrulhar produziria "mensagem — mensagem".
-	// Ainda é necessário para os erros crus de `baixarArquivo`, que chama o
-	// helper HTTP direto.
-	if (erro instanceof NodeOperationError || erro instanceof NodeApiError) return erro;
+/**
+ * Replaces the API's raw message with the mapped text from de-para/.
+ *
+ * Idempotent: the request helper already translates at the source and the item
+ * loop passes errors through here again, so an error that is already a node
+ * error is returned untouched. Downloads call the HTTP helper directly and do
+ * still arrive raw, which is why this stays on that path.
+ *
+ * @param error The value caught.
+ * @returns A NodeOperationError or NodeApiError, never a raw error.
+ */
+function translateError(this: IExecuteFunctions, error: unknown): Error {
+	if (error instanceof NodeOperationError || error instanceof NodeApiError) return error;
 
-	const e = erro as { message?: string; httpCode?: string; statusCode?: number };
-	const mensagem = String(e.message ?? '');
+	const e = error as { message?: string; httpCode?: string; statusCode?: number };
+	const message = String(e.message ?? '');
 	const status = Number(e.httpCode ?? e.statusCode);
-	const detalhe = detalheDaApi(erro);
-	const completa = detalhe ? `${mensagem} — ${detalhe}` : mensagem;
+	const detail = apiErrorDetail(error);
+	const full = detail ? `${message} — ${detail}` : message;
 
-	for (const entrada of Object.values(ERROR_MAP)) {
-		const casaMensagem = entrada.apiMessagePt && completa.includes(entrada.apiMessagePt);
-		const casaCodigo = entrada.apiCode && completa.includes(entrada.apiCode);
-		const casaStatus = entrada.httpStatus && entrada.httpStatus === status;
-		if (casaMensagem || casaCodigo || (casaStatus && !entrada.apiMessagePt && !entrada.apiCode)) {
-			return new NodeOperationError(this.getNode(), entrada.displayMessage, {
-				description: completa,
+	for (const entry of Object.values(ERROR_MAP)) {
+		const messageMatches = entry.apiMessagePt && full.includes(entry.apiMessagePt);
+		const codeMatches = entry.apiCode && full.includes(entry.apiCode);
+		const statusMatches = entry.httpStatus && entry.httpStatus === status;
+		if (messageMatches || codeMatches || (statusMatches && !entry.apiMessagePt && !entry.apiCode)) {
+			return new NodeOperationError(this.getNode(), entry.displayMessage, {
+				description: full,
 			});
 		}
 	}
 
-	// Sem mapeamento: propaga o motivo da API na própria mensagem, senão o
-	// usuário recebe só o texto genérico do status.
-	if (detalhe) {
-		return new NodeOperationError(this.getNode(), completa, { description: detalhe });
+	if (detail) {
+		return new NodeOperationError(this.getNode(), full, { description: detail });
 	}
-	return comoErroDeNode.call(this, erro);
+	return toNodeError.call(this, error);
 }

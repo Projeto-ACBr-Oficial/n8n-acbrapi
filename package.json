@@ -1,6 +1,6 @@
 {
   "name": "@projetoacbr/n8n-nodes-acbrapi",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Official n8n node for the ACBr API, maintained by the ACBr team: Brazilian electronic fiscal documents and business data lookups. Service invoices (NFS-e), CNPJ and postal code in this version, more document types to follow.",
   "keywords": [
     "n8n-community-node-package",
@@ -45,8 +45,8 @@
     ]
   },
   "scripts": {
-    "gen": "node scripts/gerar-properties.mjs",
-    "build": "npm run gen && tsc && node scripts/copiar-icones.mjs",
+    "gen": "node scripts/generate-properties.mjs",
+    "build": "npm run gen && tsc && node scripts/copy-icons.mjs",
     "dev": "npm run gen && tsc --watch",
     "lint": "eslint nodes/**/*.ts credentials/**/*.ts package.json",
     "lintfix": "eslint nodes/**/*.ts credentials/**/*.ts package.json --fix",

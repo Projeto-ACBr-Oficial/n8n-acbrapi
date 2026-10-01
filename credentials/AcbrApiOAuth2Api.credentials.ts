@@ -1,15 +1,14 @@
 import type { ICredentialTestRequest, ICredentialType, INodeProperties } from 'n8n-workflow';
 
 /**
- * Credencial OAuth2 client_credentials da ACBr API.
+ * OAuth 2 client_credentials credential for the ACBr API.
  *
- * O ponto central: o endpoint de token da ACBr API aceita apenas
- * 4 requisições por hora. Execuções de n8n são stateless, então o padrão
- * ingênuo — pedir token dentro do workflow — estoura o limite em minutos.
- * Estendendo `oAuth2Api`, o token passa a viver no credential store do n8n,
- * que o reaproveita e renova perto de `expires_in` (~30 dias).
+ * The ACBr token endpoint allows only 4 requests per hour. n8n executions are
+ * stateless, so requesting a token inside the workflow exhausts that limit
+ * within minutes. Extending `oAuth2Api` puts the token in n8n's credential
+ * store, which reuses it and renews it near `expires_in` (about 30 days).
  *
- * Não remova o `extends`: é ele que dá acesso a esse cache.
+ * Do not remove the `extends`: it is what grants access to that cache.
  */
 export class AcbrApiOAuth2Api implements ICredentialType {
 	name = 'acbrApiOAuth2Api';
@@ -23,15 +22,15 @@ export class AcbrApiOAuth2Api implements ICredentialType {
 	documentationUrl = 'https://dev.acbr.api.br/docs/autenticacao';
 
 	/**
-	 * Teste de conexão da credencial.
+	 * Connection test shown when the credential is saved.
 	 *
-	 * Roda a consulta de CEP: é o endpoint mais barato que exige um token válido,
-	 * não depende de empresa cadastrada nem de certificado, e responde em
-	 * milissegundos. Custa 0,1 crédito por teste.
+	 * Runs the postal code lookup: the cheapest endpoint that requires a valid
+	 * token, independent of any registered company or certificate, answering in
+	 * milliseconds at 0.1 credit per test.
 	 *
-	 * Em troca, depende do escopo 'cep'. Quem desmarcar esse escopo recebe 403 no
-	 * teste mesmo com credencial correta — daí a regra abaixo, que troca o 403
-	 * cru por uma frase que diz o que houve.
+	 * It does depend on the 'cep' scope, so unchecking that scope returns 403
+	 * even with correct credentials. The rule below replaces that bare 403 with
+	 * a sentence explaining what happened.
 	 */
 	test: ICredentialTestRequest = {
 		request: {
@@ -96,18 +95,12 @@ export class AcbrApiOAuth2Api implements ICredentialType {
 			default: ['nfse', 'cnpj', 'cep'],
 			description:
 				'Which parts of the API this credential may reach. Leave all selected unless you want to restrict it — a request to an endpoint outside the selected scopes fails with HTTP 403.',
-			// Só os escopos que o 1.0 usa. Os de 'empresa' e 'debug' voltam junto com
-			// as operações; quem atualizar precisará reabrir a credential para marcá-los,
-			// porque o token em cache é emitido com os escopos vigentes na criação.
 			options: [
 				{ name: 'Service Invoices (NFS-e)', value: 'nfse' },
 				{ name: 'CNPJ Lookup', value: 'cnpj' },
 				{ name: 'Postal Code Lookup', value: 'cep' },
 			],
 		},
-
-		// --- Abaixo: preenchido pela credencial, não exposto ao usuário. ---
-
 		{
 			displayName: 'Grant Type',
 			name: 'grantType',
@@ -118,20 +111,12 @@ export class AcbrApiOAuth2Api implements ICredentialType {
 			displayName: 'Access Token URL',
 			name: 'accessTokenUrl',
 			type: 'hidden',
-			// Idêntico nos dois ambientes — só a URL base da API muda.
 			default: 'https://auth.acbr.api.br/realms/ACBrAPI/protocol/openid-connect/token',
 		},
 		{
 			displayName: 'Scope',
 			name: 'scope',
 			type: 'hidden',
-			// A ACBr API espera os escopos separados por espaço. A lista vem dos
-			// checkboxes acima.
-			//
-			// VERIFICAR NA PRIMEIRA EXECUÇÃO: se a camada de credenciais não
-			// avaliar `$self` aqui, troque este campo por um `string` editável com
-			// default 'nfse cnpj cep'. O comportamento aparece no log
-			// da requisição de token (rode com N8N_LOG_LEVEL=debug).
 			default: '={{ ($self.scopes || []).join(" ") }}',
 		},
 		{
