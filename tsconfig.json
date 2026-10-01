@@ -19,10 +19,10 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "preserveConstEnums": true
-    // Sem "incremental": o .tsbuildinfo fica fora de dist/ para não ir no
-    // tarball, e aí apagar dist/ não invalida o cache — o tsc não emite nada e
-    // o build "passa" produzindo um pacote sem JS. São três arquivos de fonte;
-    // compilar do zero custa segundos.
+    // No "incremental" on purpose. Keeping .tsbuildinfo out of dist/ so it stays
+    // out of the tarball means deleting dist/ no longer invalidates the cache:
+    // tsc emits nothing, the build reports success, and the package ships
+    // without JavaScript. Three source files compile from scratch in seconds.
   },
   "include": ["credentials/**/*.ts", "nodes/**/*.ts"],
   "exclude": ["node_modules", "dist", "scripts"]

@@ -88,6 +88,12 @@ credential in n8n:
 You do not configure a token URL or a refresh strategy — the credential fills those in and n8n caches
 the token for you.
 
+**Saving the credential tests it.** n8n runs a live call against the API with the token it just
+obtained and shows the result on the same screen, so a wrong client ID, the wrong environment or a
+missing scope surfaces immediately instead of on your first execution. The test uses the postal code
+lookup, which costs 0.1 credit and needs the `Postal Code Lookup` scope — unchecking that scope makes
+the test report a 403 even though the credential itself is fine, and the message says so.
+
 > **NFS-e in staging often does not work.** Many city halls have no staging environment at all, and
 > the API answers `X999: Erro de Conexão: Não informado a URL de Homologação`. The node translates
 > that into a readable message. When it happens, the only way to test that city is production.
