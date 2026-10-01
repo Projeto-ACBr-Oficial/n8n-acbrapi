@@ -2,23 +2,23 @@
 	"meta": {
 		"versao": "0.1",
 		"data": "2026-08-19",
-		"escopo": "POST /nfse/dps — campos obrigatórios e os presentes nos payloads de exemplo (10/08/2026 e emissão autorizada de 18/08/2026)",
-		"objetivo": "Fonte única do de-para pt-BR → inglês. As properties do node são GERADAS deste arquivo, não escritas à mão. Revisável por fiscalista sem ler TypeScript.",
+		"escopo": "POST /nfse/dps — required fields plus everything present in the sample payloads (2026-08-10 and the authorized issue of 2026-08-18)",
+		"objetivo": "Single source of the Portuguese-to-English mapping. The node properties are GENERATED from this file, not hand-written. Reviewable by a tax specialist without reading TypeScript.",
 		"convencoes": {
-			"chave": "Caminho JSON completo no payload de emissão.",
-			"displayName": "Rótulo visível na UI do node. Obrigatoriamente em inglês (verificação n8n).",
-			"name": "Nome interno do parâmetro no n8n, camelCase em inglês. Ver 'questaoAberta' abaixo.",
-			"ptName": "Nome original do campo na API. Vai na description e serve de chave para mapear erro da API de volta ao campo (P-17).",
-			"fill": "Quem fornece o valor: 'node' (preenchido automaticamente, não exposto), 'credential', 'user', 'template' (modelo de serviço), 'api' (injetado pela API a partir do cadastro da empresa).",
-			"section": "Agrupamento na UI. Seções diferentes de 'core' ficam atrás de toggle.",
-			"optionsPendentes": "Marca enum cujo conjunto de valores ainda não foi extraído do swagger (P-06). NÃO inventar valores."
+			"chave": "Full JSON path in the issue payload.",
+			"displayName": "Label shown in the node UI. Must be in English (n8n verification).",
+			"name": "Internal parameter name in n8n, English camelCase. See 'questaoAberta' below.",
+			"ptName": "The field's original name in the API. It goes into the description and is the key that maps an API error back to the field.",
+			"fill": "Who supplies the value: 'node' (filled automatically, never exposed), 'credential', 'user', 'template' (service template), 'api' (injected by the API from the company registration).",
+			"section": "UI grouping. Sections other than 'core' sit behind a toggle.",
+			"optionsPendentes": "Marks an enum whose set of values has not been extracted from the swagger yet. Do NOT invent values."
 		},
-		"questaoAberta": "A verificação do n8n exige nomes de parâmetro em inglês. Não está claro se isso alcança o 'name' interno (visível apenas em expressões) ou só o 'displayName'. Este arquivo adota 'name' em inglês por segurança, mantendo 'ptName' para rastreabilidade e mapeamento de erro.",
+		"questaoAberta": "n8n verification requires parameter names in English. It is not clear whether that reaches the internal 'name' (visible only in expressions) or only 'displayName'. This file uses English for 'name' to be safe, keeping 'ptName' for traceability and error mapping.",
 		"naoEnviar": [
-			"infDPS.serie e infDPS.nDPS — numeração, vem da configuração da empresa",
-			"infDPS.prest.regTrib.opSimpNac e .regEspTrib — injetados pela API a partir do cadastro",
-			"infDPS.serv.locPrest.cLocPrestacao — injetado a partir do município do prestador",
-			"infDPS.valores.trib.tribMun.pAliq, vBC, vISSQN, vLiq — quem calcula é o município/provedor"
+			"infDPS.serie and infDPS.nDPS — numbering, comes from the company configuration",
+			"infDPS.prest.regTrib.opSimpNac and .regEspTrib — injected by the API from the registration",
+			"infDPS.serv.locPrest.cLocPrestacao — injected from the provider's municipality",
+			"infDPS.valores.trib.tribMun.pAliq, vBC, vISSQN, vLiq — the city or provider calculates these"
 		]
 	},
 	"campos": {
@@ -38,7 +38,7 @@
 					"label": "National standard"
 				}
 			],
-			"optionsPendentes": "P-07 — 'nacional' é o único valor observado em payload real. Confirmar os demais e quando usar cada um."
+			"optionsPendentes": "'nacional' is the only value seen in a real payload. Confirm the others and when each applies."
 		},
 		"ambiente": {
 			"ptName": "ambiente",
@@ -59,7 +59,7 @@
 					"label": "Production"
 				}
 			],
-			"nota": "Passado pelo chamador, não deduzido da credential: a mesma credential atende N empresas e cada uma tem seu ambiente no cadastro. O node transcreve para infDPS.tpAmb (producao=1, homologacao=2). A URL base continua vindo da credential — host é onde a API está, ambiente é dado do pedido (prod.acbr.api.br atende ambiente=homologacao). Default homologacao: erra para o lado seguro. Muitos municípios não têm homologação — erro X999, ver P-16.",
+			"nota": "Passed by the caller, not derived from the credential: one credential serves N companies and each carries its own environment in its registration. The node transcribes it into infDPS.tpAmb (producao=1, homologacao=2). The base URL still comes from the credential — the host is where the API lives, the environment is data of the request (prod.acbr.api.br does serve ambiente=homologacao). Defaults to homologacao, erring on the safe side. Many municipalities have no staging at all, which is the X999 error.",
 			"default": "homologacao"
 		},
 		"referencia": {
@@ -71,7 +71,7 @@
 			"section": "core",
 			"fill": "user",
 			"description": "Your own identifier for this invoice (referencia). Returned by Get and List, so it links the invoice back to your records without a local table.",
-			"nota": "É a chave de idempotência: a API valida unicidade (bloqueia em processando, autorizada e cancelada; libera após erro de processamento) e o ListarNfse aceita o campo como filtro, o que viabiliza o replay. Gerar UMA vez e reusar em toda retentativa — nunca regenerar. Formato recomendado: chave de negócio determinística com sufixo de tentativa, ex. '{id_contrato}-2026-08' e '-r2' na reemissão após cancelamento."
+			"nota": "This is the idempotency key. The API enforces uniqueness (blocked while processando, autorizada and cancelada; released after a processing error) and ListarNfse accepts it as a filter, which is what makes the replay possible. Generate it ONCE and reuse it on every retry — never regenerate. Recommended shape: a deterministic business key with an attempt suffix, e.g. '{contract_id}-2026-08' and '-r2' when reissuing after a cancellation."
 		},
 		"infDPS.tpAmb": {
 			"ptName": "tpAmb",
@@ -92,7 +92,7 @@
 					"label": "Staging"
 				}
 			],
-			"nota": "Confirmado: 2 = homologação (ambGer 2 no XML autorizado). Não expor ao usuário."
+			"nota": "Confirmed: 2 = staging (ambGer 2 in the authorized XML). Not exposed to the user."
 		},
 		"infDPS.dhEmi": {
 			"ptName": "dhEmi",
@@ -114,7 +114,7 @@
 			"section": "auto",
 			"fill": "node",
 			"description": "Identifier of the application issuing the invoice (verAplic).",
-			"nota": "Identificar o conector com token CURTO, ex. 'n8n-acbrapi/<versão>' — dá à ACBr medição de adoção no lado do servidor (P-33). O nome do pacote (@projetoacbr/n8n-nodes-acbrapi) não cabe: campo fiscal com limite de tamanho, a confirmar em P-06. Referência: o autorizador usa 'SefinNacional_1.6.0' (19 caracteres)."
+			"nota": "Identifies the connector with a SHORT token, e.g. 'n8n-acbrapi/<version>', which gives ACBr server-side adoption measurement. The package name (@projetoacbr/n8n-nodes-acbrapi) does not fit: this is a fiscal field with a length limit. For reference, the authorizer uses 'SefinNacional_1.6.0' (19 characters)."
 		},
 		"infDPS.dCompet": {
 			"ptName": "dCompet",
@@ -136,7 +136,7 @@
 			"section": "provider",
 			"fill": "user",
 			"description": "Tax ID (CNPJ) of the company issuing the invoice. Must already be registered under your ACBr API tenant, with a certificate and NFS-e settings.",
-			"nota": "POR EXECUÇÃO, não por credencial. Um tenant de software house atende N empresas com a mesma credencial, então este campo é o que seleciona qual delas emite — é o que permite ao conector orquestrar um produto multiempresa. Alternativa mutuamente exclusiva: infDPS.prest.CPF."
+			"nota": "PER EXECUTION, not per credential. A software house tenant serves N companies with the same credential, so this field is what selects which one is issuing — it is what lets the connector orchestrate a multi-company product. Mutually exclusive alternative: infDPS.prest.CPF."
 		},
 		"infDPS.prest.CPF": {
 			"ptName": "prest.CPF",
@@ -157,7 +157,7 @@
 			"section": "customer",
 			"fill": "user",
 			"description": "Customer company tax ID (CNPJ). Use the Consult CNPJ operation to fill the remaining customer fields from it.",
-			"nota": "Para PJ, este é o único dado que o usuário precisa informar — ConsultarCnpj devolve nome e endereço."
+			"nota": "For a company this is the only datum the user has to supply — ConsultarCnpj returns the name and the address."
 		},
 		"infDPS.toma.CPF": {
 			"ptName": "toma.CPF",
@@ -168,7 +168,7 @@
 			"section": "customer",
 			"fill": "user",
 			"description": "Customer individual tax ID (CPF). Mutually exclusive with the customer company tax ID.",
-			"nota": "Não há consulta por CPF — para pessoa física o nome e o endereço precisam ser informados."
+			"nota": "There is no lookup by CPF — for an individual the name and address have to be supplied."
 		},
 		"infDPS.toma.xNome": {
 			"ptName": "toma.xNome",
@@ -261,7 +261,7 @@
 			"fill": "template",
 			"description": "National service taxation code (cTribNac): 6 digits, from the service list of Complementary Law 116/2003, written without separators (item + sub-item + breakdown, so 14.02.01 becomes 140201). It decides how the city taxes the service, so the wrong code produces a valid invoice with the wrong tax. There is no lookup endpoint - find the code for your service in the official list at <a href=\"https://www.gov.br/nfse/pt-br/mei-e-demais-empresas/codigos-de-tributacao-nacional-nbs\" target=\"_blank\">gov.br/nfse</a>, or ask your accountant.",
 			"exemplo": "140201",
-			"nota": "Não há endpoint de consulta. Tabela embarcada no node com atualização a partir do JSON estático (P-01). Searchable resource locator por causa do tamanho da lista."
+			"nota": "There is no lookup endpoint. The table ships with the node and is refreshed from a static JSON. A searchable resource locator, because of the size of the list."
 		},
 		"infDPS.serv.cServ.xDescServ": {
 			"ptName": "serv.cServ.xDescServ",
@@ -298,7 +298,7 @@
 			"section": "service",
 			"fill": "template",
 			"description": "City-specific service code (cTribMun). Required by some cities — check the city metadata.",
-			"nota": "Ausente na emissão autorizada de 18/08/2026, logo opcional no padrão nacional. Exigência por município em P-08."
+			"nota": "Absent from the authorized issue of 2026-08-18, so optional in the national standard. Per-municipality requirements still to be mapped."
 		},
 		"infDPS.serv.cServ.CNAE": {
 			"ptName": "serv.cServ.CNAE",
@@ -343,7 +343,7 @@
 					"label": "Taxable operation"
 				}
 			],
-			"optionsPendentes": "P-06 — apenas o valor 1 foi observado em emissão real. Os demais (exportação, não incidência, imunidade, suspensão) precisam vir do swagger com os códigos exatos. NÃO inventar."
+			"optionsPendentes": "Only the value 1 has been seen in a real issue. The others (export, non-incidence, immunity, suspension) must come from the swagger with their exact codes. Do NOT invent them."
 		},
 		"infDPS.valores.trib.tribMun.tpRetISSQN": {
 			"ptName": "valores.trib.tribMun.tpRetISSQN",
@@ -361,7 +361,7 @@
 					"label": "Not withheld"
 				}
 			],
-			"optionsPendentes": "P-06 — apenas o valor 1 foi observado. Confirmar os códigos de retenção pelo tomador e pelo intermediário. NÃO inventar."
+			"optionsPendentes": "Only the value 1 has been seen. Confirm the withholding codes for the customer and for the intermediary. Do NOT invent them."
 		},
 		"infDPS.valores.trib.tribMun.cLocIncid": {
 			"ptName": "valores.trib.tribMun.cLocIncid",
@@ -469,7 +469,7 @@
 				}
 			],
 			"optionsPendentes": "P-06 — valor 0 observado. Confirmar o conjunto completo.",
-			"nota": "O bloco TotTrib inteiro é obrigatório, ao contrário do que 'required: false' sugere: sem ele a API devolve 400 ValidationFailed / ValueRequired — \"O campo 'InfDPS.Valores.Trib.TotTrib' é obrigatório\" (observado em 24/08/2026). Enviar indTotTrib = 0 satisfaz o requisito sem declarar valores. Rever se a seção 'totalTaxes' deve continuar atrás de toggle. TotTrib aceita três formas mutuamente exclusivas: vTotTrib (valores), pTotTrib (percentuais) ou indTotTrib = 0. Enviar mais de uma é ambíguo — escolher uma."
+			"nota": "The whole TotTrib block is mandatory, contrary to what 'required: false' suggests: without it the API returns 400 ValidationFailed / ValueRequired — \"O campo 'InfDPS.Valores.Trib.TotTrib' é obrigatório\" (seen on 2026-08-24). Sending indTotTrib = 0 satisfies the requirement without declaring any amounts. Revisit whether the 'totalTaxes' section should stay behind a toggle. TotTrib accepts three mutually exclusive shapes: vTotTrib (amounts), pTotTrib (percentages) or indTotTrib = 0. Sending more than one is ambiguous — pick one."
 		},
 		"infDPS.IBSCBS.finNFSe": {
 			"ptName": "IBSCBS.finNFSe",
@@ -542,12 +542,12 @@
 		"core": {
 			"displayName": "—",
 			"toggle": false,
-			"nota": "Campos sempre visíveis."
+			"nota": "Always visible fields."
 		},
 		"auto": {
 			"displayName": "—",
 			"toggle": false,
-			"nota": "Preenchidos pelo node, nunca renderizados."
+			"nota": "Filled in by the node, never rendered."
 		},
 		"customer": {
 			"displayName": "Customer",
@@ -568,7 +568,7 @@
 		"ibscbs": {
 			"displayName": "IBS/CBS (Tax Reform)",
 			"toggle": true,
-			"nota": "Opcional hoje; exigido conforme a reforma avança (P-25)."
+			"nota": "Optional today; required as the tax reform advances."
 		},
 		"provider": {
 			"displayName": "Service Provider",
@@ -577,11 +577,11 @@
 		"cancellation": {
 			"displayName": "Cancellation Fields",
 			"toggle": true,
-			"nota": "Vazio = sem corpo na requisição."
+			"nota": "Empty means no body on the request."
 		}
 	},
 	"resposta": {
-		"nota": "Retorno de POST /nfse/dps. A API é assíncrona: o id vem sempre, imediatamente, e o acompanhamento é feito com ele.",
+		"nota": "Response of POST /nfse/dps. The API is asynchronous: the id always comes back immediately, and everything that follows is tracked with it.",
 		"campos": {
 			"id": {
 				"displayName": "Invoice ID",
@@ -621,13 +621,13 @@
 						"resultado": "cancelada"
 					}
 				],
-				"nota": "Regra do laco: prosseguir ENQUANTO status == 'processando'; qualquer outro valor e terminal, com o motivo em 'mensagens'. Whitelist do que continua, nao do que termina — assim um estado desconhecido ou futuro para o laco em vez de fazer girar indefinidamente. Polling por GET /nfse/{id}, nunca por Sincronizar (cobra 1 unidade)."
+				"nota": "Loop rule: keep going WHILE status == 'processando'; any other value is terminal, with the reason in 'mensagens'. A whitelist of what continues, not of what ends — so an unknown or future state stops the loop instead of spinning forever. Poll with GET /nfse/{id}, never with Sincronizar, which charges one credit."
 			},
 			"numero": {
 				"displayName": "Invoice Number",
 				"description": "Invoice number assigned by the city hall (numero). Only present once authorized.",
 				"exemplo": "36",
-				"nota": "Atribuído somente na autorização — processamento FIFO, sem risco de colisão."
+				"nota": "Assigned only on authorization — FIFO processing, no risk of collision."
 			},
 			"codigo_verificacao": {
 				"displayName": "Verification Code",
@@ -637,7 +637,7 @@
 			"link_url": {
 				"displayName": "Public Invoice URL",
 				"description": "Official public page where the invoice can be viewed and verified (link_url).",
-				"nota": "Preferir este link ao PDF em fluxos de notificação — mais leve, é a página oficial, e evita a questão de consumo de crédito no download do PDF (P-05)."
+				"nota": "Prefer this link over the PDF in notification flows: lighter, it is the official page, and it sidesteps the question of credit consumption on the PDF download."
 			},
 			"data_emissao": {
 				"displayName": "Issue Date",
@@ -650,7 +650,7 @@
 			"referencia": {
 				"displayName": "External Reference",
 				"description": "The external reference sent in the request, echoed back. Links the invoice to your own records.",
-				"nota": "Fica vinculada ao id nfs_. É a chave de idempotência."
+				"nota": "Bound to the nfs_ id. This is the idempotency key."
 			},
 			"DPS": {
 				"displayName": "DPS",
@@ -659,50 +659,50 @@
 					"serie": "20",
 					"nDPS": "2"
 				},
-				"nota": "Confirma que a numeração é injetada pela API a partir da configuração da empresa."
+				"nota": "Confirms that the numbering is injected by the API from the company configuration."
 			},
 			"mensagens": {
 				"displayName": "Messages",
 				"description": "Messages returned by the city hall, including rejection reasons.",
-				"nota": "Surface ao usuário em caso de rejeição — é onde vem o motivo."
+				"nota": "Surface this to the user on a rejection — it carries the reason."
 			}
 		}
 	},
 	"erros": {
-		"nota": "De-para das mensagens de erro da API (pt-BR) para o texto exibido ao usuário do node (inglês). Chave: código + trecho identificador da mensagem. Ver P-17.",
+		"nota": "Maps the API's Portuguese error messages to the English text shown to the node's user. Key: the code plus an identifying fragment of the message.",
 		"referenciaDuplicada": {
 			"httpStatus": 400,
 			"apiCode": "ValidationFailed",
 			"apiMessagePt": "O campo 'referencia' deve ser único",
 			"displayMessage": "An invoice with this external reference was already issued.",
 			"tratamento": "replayIdempotente",
-			"descricaoTratamento": "NÃO propagar como falha. Buscar a nota já emitida por este 'referencia' e devolvê-la como resultado, sinalizando alreadyIssued: true. Propagar o erro faz o usuário reemitir com outro 'referencia' e produz exatamente a duplicata que a restrição impede.",
-			"comoLocalizar": "GET /nfse (ListarNfse) filtrando por cpf_cnpj + ambiente + referencia. O node já tem os dois primeiros.",
+			"descricaoTratamento": "Do NOT propagate as a failure. Fetch the invoice already issued under this 'referencia' and return it as the result, flagged alreadyIssued: true. Propagating the error makes the user reissue under a different 'referencia' and produces exactly the duplicate the constraint prevents.",
+			"comoLocalizar": "GET /nfse (ListarNfse) filtering by cpf_cnpj + ambiente + referencia. The node already holds the first two.",
 			"coberturaPorEstado": {
 				"processando": "bloqueado",
 				"autorizada": "bloqueado",
 				"cancelada": "bloqueado",
-				"erroDeProcessamento": "liberado — reemissão legítima"
+				"erroDeProcessamento": "released — legitimate reissue"
 			},
-			"nota": "Cobre os três estados, incluindo pendente — logo cobre o caso mais comum de retry. Regra correlata: gerar o 'referencia' uma única vez e reusá-lo em toda retentativa, nunca regenerar. A mensagem original vaza o tipo interno 'Nfse.Entities.TNfseEntity'; não repassar ao usuário."
+			"nota": "Covers all three states, pending included, so it covers the most common retry case. Related rule: generate the 'referencia' once and reuse it on every retry, never regenerate. The original message leaks the internal type 'Nfse.Entities.TNfseEntity'; do not pass it on to the user."
 		},
 		"x999SemHomologacao": {
 			"apiMessagePt": "X999: Erro de Conexão: Não informado a URL de Homologação",
 			"displayMessage": "This city has no staging environment. Switch the credential to production to test with this city.",
 			"tratamento": "mensagemEspecifica",
-			"nota": "Esperado ser comum — poucos dos 102 provedores mantêm homologação (P-16)."
+			"nota": "Expected to be common — few of the municipal providers keep a staging environment."
 		},
 		"escopoAusente": {
 			"httpStatus": 403,
 			"displayMessage": "Your credential is missing the '{escopo}' scope. Edit the ACBr API credential and enable it.",
 			"tratamento": "mensagemEspecifica",
-			"descricaoTratamento": "O node conhece o escopo exigido por cada operação, então deve nomeá-lo na mensagem em vez de repassar o 403 cru. Modo de falha criado pela seleção de escopos por checkbox na credencial (P-39).",
+			"descricaoTratamento": "The node knows which scope each operation requires, so it should name it in the message instead of passing the raw 403 on. This failure mode exists because the credential selects scopes with checkboxes.",
 			"mapaOperacaoEscopo": {
-				"nfse": "todas as operações de NFS-e",
-				"empresa": "todas as operações de Empresa",
+				"nfse": "every NFS-e operation",
+				"empresa": "every Company operation",
 				"cnpj": "Consult CNPJ, List Companies by Activity Code",
 				"cep": "Consult Address by Postal Code",
-				"debug": "todas as operações de Debug"
+				"debug": "every Debug operation"
 			}
 		},
 		"creditoInsuficiente": {
@@ -710,7 +710,7 @@
 			"apiCode": "InsufficientCredits",
 			"displayMessage": "Not enough credits in your ACBr API account to issue this invoice.",
 			"tratamento": "mensagemEspecifica",
-			"nota": "402, não 403 — é crédito, não permissão (P-19)."
+			"nota": "402, not 403 — it is credit, not permission."
 		},
 		"cotaExcedida": {
 			"httpStatus": 402,
@@ -720,23 +720,23 @@
 		}
 	},
 	"pendentes": {
-		"nota": "Blocos do payload ainda não mapeados — entram por toggle, e dependem do swagger completo (P-06).",
+		"nota": "Payload blocks not mapped yet. They arrive behind a toggle and depend on the full swagger.",
 		"blocos": [
-			"infDPS.subst — substituição de NFS-e",
-			"infDPS.interm — intermediário do serviço",
-			"infDPS.serv.comExt — exportação de serviço",
-			"infDPS.serv.obra — construção civil",
+			"infDPS.subst — replacement of an NFS-e",
+			"infDPS.interm — service intermediary",
+			"infDPS.serv.comExt — service export",
+			"infDPS.serv.obra — construction works",
 			"infDPS.serv.atvEvento — eventos",
-			"infDPS.serv.infoCompl — informações complementares",
+			"infDPS.serv.infoCompl — additional information",
 			"infDPS.valores.vDescCondIncond — descontos condicional e incondicional",
-			"infDPS.valores.vDedRed — deduções e reduções (bloco mais profundo do payload)",
-			"infDPS.valores.trib.tribFed — PIS/COFINS e retenções federais",
+			"infDPS.valores.vDedRed — deductions and reductions (deepest block of the payload)",
+			"infDPS.valores.trib.tribFed — PIS/COFINS and federal withholdings",
 			"infDPS.IBSCBS.dest, .imovel, .valores.gReeRepRes, .gIBSCBS.gTribRegular, .gIBSCBS.gDif"
 		]
 	},
 	"cancelamento": {
 		"endpoint": "POST /nfse/{id}/cancelamento",
-		"nota": "Nenhum campo do corpo é obrigatório na API — apenas o 'id' no path. Ambos são exigidos somente por algumas prefeituras. Se o usuário não preencher nada, NÃO enviar corpo. Consumo: 1 unidade por requisição. Cancelar bloqueia o reuso do 'referencia'.",
+		"nota": "No body field is mandatory in the API — only the 'id' in the path. Both are required by some city halls only. If the user fills in nothing, do NOT send a body. Consumption: 1 credit per request. Cancelling blocks reuse of the 'referencia'.",
 		"campos": {
 			"codigo": {
 				"ptName": "codigo",
@@ -747,7 +747,7 @@
 				"section": "cancellation",
 				"fill": "user",
 				"description": "Cancellation code, required by some city halls only. Accepted values come from your city hall manual — there is no global list.",
-				"nota": "Sem lista enumerável: é por município, como o resto das exigências locais (P-08). Campo livre, não dropdown."
+				"nota": "No enumerable list: it is per municipality, like the rest of the local requirements. A free text field, not a dropdown."
 			},
 			"motivo": {
 				"ptName": "motivo",

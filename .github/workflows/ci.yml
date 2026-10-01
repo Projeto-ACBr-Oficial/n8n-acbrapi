@@ -34,4 +34,8 @@ jobs:
 
       - run: npm run lint
 
+      # English-only is a verification requirement that no linter checks:
+      # a manual review caught Portuguese comments after two releases.
+      - run: npm run lint:language
+
       - run: npm run build
