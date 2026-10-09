@@ -25,6 +25,7 @@ throws.
 | **Service invoices — NFS-e** | **Issue · Preview · Get · Get Many · Cancel · Get Cancellation · Sync · Download PDF · Download XML** |
 | **CNPJ lookup** | **Get** |
 | **Postal code lookup — CEP** | **Get** |
+| **Account** — credit balance and statement | **Get Credit Balance · Get Statement** |
 | Companies — registration, A1 certificate, per-service settings | Planned |
 | Document trace — what was sent to the city hall and what came back | Planned |
 | Product invoices — NF-e | Planned |
@@ -83,7 +84,7 @@ credential in n8n:
 | --- | --- |
 | **Environment** | `Staging` (`hom.acbr.api.br`) while developing, `Production` (`prod.acbr.api.br`) for real invoices. Credentials are issued per environment and are **not** interchangeable. |
 | **Client ID** / **Client Secret** | Created in the [ACBr API console](https://console.acbr.api.br). |
-| **Scopes** | One scope per service. All three are selected by default; uncheck to restrict. A request to an endpoint outside the selected scopes fails with HTTP 403, and the node names the missing scope instead of passing the raw error through. |
+| **Scopes** | One scope per service. All of them are selected by default; uncheck to restrict. A request to an endpoint outside the selected scopes fails with HTTP 403, and the node names the missing scope instead of passing the raw error through. |
 
 You do not configure a token URL or a refresh strategy — the credential fills those in and n8n caches
 the token for you.
@@ -127,6 +128,16 @@ through n8n.
 | **Sync** | Forces the city hall to be re-read. Use only when an invoice looks stuck | 1 per call |
 | **Download PDF** | Downloads the DANFSE as a binary field | first download free |
 | **Download XML** | Downloads the invoice XML as a binary field | first download free |
+
+### Account
+
+| Operation | What it does | Credits |
+| --- | --- | --- |
+| **Get Credit Balance** | Prepaid credits used and the limit | 0 |
+| **Get Statement** | Credit movements, most recent first | 0 |
+
+Reading the balance does not consume credits, so a workflow can check it before an operation
+that does — and stop before it hits a 402.
 
 ### CNPJ
 
@@ -241,7 +252,7 @@ n8n canvas, then replace the provider CNPJ, the customer data and the service co
         "servicePeriod": "={{ $now.toFormat('yyyy-MM-dd') }}T00:00:00",
         "providerCnpj": "00000000000000",
         "customerCnpj": "11111111111111",
-        "customerName": "Cliente Exemplo Ltda",
+        "customerName": "Example Customer Ltda",
         "customerCityCode": "3550308",
         "customerPostalCode": "01310100",
         "customerStreet": "Avenida Paulista",

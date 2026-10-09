@@ -50,9 +50,33 @@ const SKIP = [
 
 const DIACRITICS = /[ãõáéíóúâêôàçÃÕÁÉÍÓÚÂÊÔÀÇ]/;
 
-/** Words with no English homograph, so they do not produce false positives. */
-const WORDS =
-	/\b(nao|porque|quando|entao|tambem|apenas|mesmo|cada|sobre|pelo|pela|isso|essa|esse|nunca|sempre|aqui|ainda|sendo|fica|vira|deve|pode|seja|caso|dele|dela)\b/i;
+/**
+ * Portuguese words with no English homograph, so they do not produce false
+ * positives. Accent-free on purpose: the first version of this check looked
+ * only for diacritics, and let `falhou` and `enviado` reach a reviewer inside a
+ * log message.
+ *
+ * Prose words, not identifiers. Field names, URL paths and API values are
+ * Portuguese by contract and belong in ALLOWED instead.
+ */
+const WORDS = new RegExp(
+	'\\b(' +
+		[
+			'nao', 'porque', 'quando', 'entao', 'tambem', 'apenas', 'mesmo', 'cada',
+			'sobre', 'pelo', 'pela', 'isso', 'essa', 'esse', 'nunca', 'sempre', 'aqui',
+			'ainda', 'assim', 'antes', 'depois', 'agora', 'onde', 'como', 'quem', 'qual',
+			'quais', 'todos', 'todas', 'outro', 'outra', 'muito', 'caso', 'dele', 'dela',
+			'para',
+			'sendo', 'fica', 'vira', 'deve', 'pode', 'seja', 'falhou', 'falha', 'falhar',
+			'enviado', 'enviada', 'enviar', 'recebido', 'recebida', 'receber', 'criado',
+			'criada', 'excluido', 'atualizado', 'consultar', 'emitir', 'emitida',
+			'retorna', 'devolve', 'gera', 'monta', 'trata',
+			'mensagem', 'usuario', 'senha', 'arquivo', 'exemplo', 'padrao', 'resultado',
+			'obrigatorio', 'opcional', 'invalido', 'disponivel',
+		].join('|') +
+		')\\b',
+	'i',
+);
 
 /**
  * Portuguese that has to stay, with the reason. Matched as a substring on the
@@ -74,6 +98,16 @@ const ALLOWED = [
 	'nacional',
 	// Our own term for the mapping files.
 	'de-para',
+	// Keys of the de-para schema. They are structure, not prose: some are read
+	// by the generator and renaming them would silently stop it reading the
+	// mapping, and renaming only the rest would leave the schema half in each
+	// language. The values under them are translated; the keys are not.
+	'"exemplo"',
+	'"resultado"',
+	'"nomeJsonPendente"',
+	// Real field paths in the API, which is what makes an API error traceable
+	// back to a parameter.
+	'"prefeitura.senha"',
 ];
 
 /**

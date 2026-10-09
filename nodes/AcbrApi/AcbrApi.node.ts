@@ -24,11 +24,12 @@ const BASE_URL: Record<string, string> = {
 	homologacao: 'https://hom.acbr.api.br',
 };
 
-const APPLICATION_VERSION = 'n8n-acbrapi/1.0.3';
+const APPLICATION_VERSION = 'n8n-acbrapi/1.0.4';
 
 const STATUS_IN_PROGRESS = 'processando';
 
 const SCOPE_BY_RESOURCE: Record<string, string> = {
+	conta: 'conta',
 	nfse: 'nfse',
 	empresa: 'empresa',
 	cnpj: 'cnpj',
@@ -79,6 +80,11 @@ export class AcbrApi implements INodeType {
 				noDataExpression: true,
 				default: 'nfse',				
 				options: [
+					{
+						name: 'Account',
+						value: 'conta',
+						description: 'Credit balance and consumption of your ACBr API account',
+					},
 					{ name: 'CNPJ', value: 'cnpj' },
 					{ name: 'Postal Code', value: 'cep' },
 					{
@@ -331,6 +337,57 @@ export class AcbrApi implements INodeType {
 				displayOptions: { show: { resource: ['cep'] } },
 			},
 
+			// ---------- Account ----------
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				default: 'getCreditBalance',
+				displayOptions: { show: { resource: ['conta'] } },
+				options: [
+					{
+						name: 'Get Credit Balance',
+						value: 'getCreditBalance',
+						action: 'Get the prepaid credit balance',
+						description:
+							'Read how many prepaid credits have been used and what the limit is',
+					},
+					{
+						name: 'Get Statement',
+						value: 'getStatement',
+						action: 'Get the credit statement',
+						description: 'List the credit movements of the account, most recent first',
+					},
+				],
+			},
+			{
+				displayName:
+					'Reading your balance does not consume credits, so it is safe to check it before an operation that does.',
+				name: 'accountNotice',
+				type: 'notice',
+				default: '',
+				displayOptions: { show: { resource: ['conta'] } },
+			},
+			{
+				displayName: 'Limit',
+				name: 'statementLimit',
+				type: 'number',
+				default: 10,
+				typeOptions: { minValue: 1, maxValue: 100 },
+				description: 'Max number of movements to return',
+				displayOptions: { show: { resource: ['conta'], operation: ['getStatement'] } },
+			},
+			{
+				displayName: 'Skip',
+				name: 'statementSkip',
+				type: 'number',
+				default: 0,
+				typeOptions: { minValue: 0 },
+				description: 'How many movements to skip, to page through older entries',
+				displayOptions: { show: { resource: ['conta'], operation: ['getStatement'] } },
+			},
+
 			// ---------- Debug ----------
 			{
 				displayName: 'Operation',
@@ -407,7 +464,7 @@ export class AcbrApi implements INodeType {
 				)) as IDataObject;
 			} catch (error) {
 				this.logger.error(
-					`ACBr API ${method} ${path} falhou body enviado: ${JSON.stringify(extraOptions.body ?? null)} error: ${describeError(error)}`,
+					`ACBr API ${method} ${path} failed. Request body: ${JSON.stringify(extraOptions.body ?? null)}. Error: ${describeError(error)}`,
 				);
 				throw translateError.call(this, error);
 			}
@@ -478,7 +535,16 @@ export class AcbrApi implements INodeType {
 					continue;
 				}
 
-				if (resource === 'cep' && operation === 'get') {
+				if (resource === 'conta' && operation === 'getCreditBalance') {
+					result = await request('GET', '/conta/cotas/prepago');
+				} else if (resource === 'conta' && operation === 'getStatement') {
+					const qs: IDataObject = {
+						$top: this.getNodeParameter('statementLimit', i, 10) as number,
+						$skip: this.getNodeParameter('statementSkip', i, 0) as number,
+					};
+					const statement = await request('GET', '/conta/extrato', { qs });
+					result = (statement.data as IDataObject[] | undefined) ?? [];
+				} else if (resource === 'cep' && operation === 'get') {
 					const cep = (this.getNodeParameter('cep', i) as string).replace(/\D/g, '');
 					result = await request('GET', `/cep/${cep}`);
 				} else if (resource === 'cnpj' && operation === 'get') {
@@ -545,7 +611,7 @@ export class AcbrApi implements INodeType {
 						`Operation '${operation}' on resource '${resource}' is not implemented yet`,
 						{
 							description:
-								'This version covers the service invoice (NFS-e) operations and the CNPJ and postal code lookups.',
+								'This version covers the service invoice (NFS-e) operations, the CNPJ and postal code lookups and the account balance.',
 							itemIndex: i,
 						},
 					);

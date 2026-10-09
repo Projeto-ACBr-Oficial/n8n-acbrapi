@@ -92,13 +92,14 @@ export class AcbrApiOAuth2Api implements ICredentialType {
 			displayName: 'Scopes',
 			name: 'scopes',
 			type: 'multiOptions',
-			default: ['nfse', 'cnpj', 'cep'],
+			default: ['nfse', 'cnpj', 'cep', 'conta'],
 			description:
-				'Which parts of the API this credential may reach. Leave all selected unless you want to restrict it — a request to an endpoint outside the selected scopes fails with HTTP 403.',
+				'Which parts of the API this credential may reach. Leave all selected unless you want to restrict it — a request to an endpoint outside the selected scopes fails with HTTP 403. A credential saved before a scope was added does not carry it: reopen and save it to get a token that does.',
 			options: [
 				{ name: 'Service Invoices (NFS-e)', value: 'nfse' },
 				{ name: 'CNPJ Lookup', value: 'cnpj' },
 				{ name: 'Postal Code Lookup', value: 'cep' },
+				{ name: 'Account (Credit Balance)', value: 'conta' },
 			],
 		},
 		{

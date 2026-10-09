@@ -605,20 +605,20 @@
 						"value": "autorizada",
 						"label": "Authorized",
 						"terminal": true,
-						"resultado": "sucesso"
+						"resultado": "success"
 					},
 					{
 						"value": "negada",
 						"label": "Denied",
 						"terminal": true,
-						"resultado": "falha",
-						"nota": "Motivo em 'mensagens'."
+						"resultado": "failure",
+						"nota": "The reason comes in 'mensagens'."
 					},
 					{
 						"value": "cancelada",
 						"label": "Cancelled",
 						"terminal": true,
-						"resultado": "cancelada"
+						"resultado": "cancelled"
 					}
 				],
 				"nota": "Loop rule: keep going WHILE status == 'processando'; any other value is terminal, with the reason in 'mensagens'. A whitelist of what continues, not of what ends — so an unknown or future state stops the loop instead of spinning forever. Poll with GET /nfse/{id}, never with Sincronizar, which charges one credit."
