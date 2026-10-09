@@ -14,7 +14,6 @@ import {
 	ERROR_MAP,
 	NFSE_CANCEL_PATHS,
 	NFSE_PATHS,
-	empresaFields,
 	nfseCancelFields,
 	nfseFields,
 } from './properties.generated';
@@ -31,10 +30,8 @@ const STATUS_IN_PROGRESS = 'processando';
 const SCOPE_BY_RESOURCE: Record<string, string> = {
 	conta: 'conta',
 	nfse: 'nfse',
-	empresa: 'empresa',
 	cnpj: 'cnpj',
 	cep: 'cep',
-	debug: 'debug',
 };
 
 /**
@@ -229,72 +226,6 @@ export class AcbrApi implements INodeType {
 			},
 			...nfseFields,
 
-			// ---------- Company ----------
-			{
-				displayName: 'Operation',
-				name: 'operation',
-				type: 'options',
-				noDataExpression: true,
-				default: 'get',
-				displayOptions: { show: { resource: ['empresa'] } },
-				options: [
-					{ name: 'Create', value: 'create', action: 'Create a company' },
-					{ name: 'Delete', value: 'delete', action: 'Delete a company' },
-					{ name: 'Get', value: 'get', action: 'Get a company' },
-					{
-						name: 'Get Invoice Settings',
-						value: 'getNfseConfig',
-						action: 'Get invoice settings',
-						description: 'Read the service invoice (NFS-e) settings of the company',
-					},
-					{ name: 'Get Many', value: 'getAll', action: 'Get many companies' },
-					{ name: 'Update', value: 'update', action: 'Update a company' },
-					{
-						name: 'Update Invoice Settings',
-						value: 'updateNfseConfig',
-						action: 'Update invoice settings',
-						description: 'Set series, numbering and tax regime for service invoices (NFS-e)',
-					},
-					{
-						name: 'Upload Certificate',
-						value: 'uploadCertificate',
-						action: 'Upload a digital certificate',
-						description:
-							'Prefer the ACBr API console for this. n8n stores execution data, so the certificate and its password may be kept in the execution history.',
-					},
-				],
-			},
-			{
-				displayName:
-					'Uploading a certificate sends the A1 file and its password through this workflow. n8n saves execution data, so both can remain in the execution history. The recommended path is the ACBr API console; if you automate onboarding, disable execution data retention for this workflow.',
-				name: 'certificateNotice',
-				type: 'notice',
-				default: '',
-				displayOptions: { show: { resource: ['empresa'], operation: ['uploadCertificate'] } },
-			},
-			{
-				displayName: 'Company Tax ID',
-				name: 'companyTaxId',
-				type: 'string',
-				default: '',
-				required: true,
-				description: 'CNPJ or CPF of the company, digits only',
-				displayOptions: {
-					show: {
-						resource: ['empresa'],
-						operation: [
-							'get',
-							'update',
-							'delete',
-							'uploadCertificate',
-							'getNfseConfig',
-							'updateNfseConfig',
-						],
-					},
-				},
-			},
-			...empresaFields,
-
 			// ---------- CNPJ ----------
 			{
 				displayName: 'Operation',
@@ -388,47 +319,6 @@ export class AcbrApi implements INodeType {
 				displayOptions: { show: { resource: ['conta'], operation: ['getStatement'] } },
 			},
 
-			// ---------- Debug ----------
-			{
-				displayName: 'Operation',
-				name: 'operation',
-				type: 'options',
-				noDataExpression: true,
-				default: 'getDocument',
-				displayOptions: { show: { resource: ['debug'] } },
-				options: [
-					{
-						name: 'Get Document Trace',
-						value: 'getDocument',
-						action: 'Get the trace of a fiscal document',
-					},
-					{
-						name: 'Get Original Payload',
-						value: 'getOriginalPayload',
-						action: 'Get the payload originally received',
-					},
-					{
-						name: 'Get HTTP Request Body',
-						value: 'getRequestContent',
-						action: 'Get the request sent to the city hall',
-					},
-					{
-						name: 'Get HTTP Response Body',
-						value: 'getResponseContent',
-						action: 'Get the response from the city hall',
-					},
-				],
-			},
-			{
-				displayName: 'ID',
-				name: 'debugId',
-				type: 'string',
-				default: '',
-				required: true,
-				description:
-					'Fiscal document ID for the trace operations, or the HTTP request ID for the body operations',
-				displayOptions: { show: { resource: ['debug'] } },
-			},
 		],
 	};
 
