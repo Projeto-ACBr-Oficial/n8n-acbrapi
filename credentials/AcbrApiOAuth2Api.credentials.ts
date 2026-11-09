@@ -57,7 +57,7 @@ export class AcbrApiOAuth2Api implements ICredentialType {
 			type: 'options',
 			default: 'homologacao',
 			description:
-				'Which ACBr API environment to use. Credentials are issued per environment and are not interchangeable.',
+				'Which ACBr API host to call. This selects the host only: the environment a fiscal document is issued in is a field of the operation, and the two are independent.',
 			options: [
 				{
 					name: 'Staging',
@@ -97,6 +97,7 @@ export class AcbrApiOAuth2Api implements ICredentialType {
 				'Which parts of the API this credential may reach. Leave all selected unless you want to restrict it — a request to an endpoint outside the selected scopes fails with HTTP 403. A credential saved before a scope was added does not carry it: reopen and save it to get a token that does.',
 			options: [
 				{ name: 'Service Invoices (NFS-e)', value: 'nfse' },
+				{ name: 'Companies', value: 'empresa' },
 				{ name: 'CNPJ Lookup', value: 'cnpj' },
 				{ name: 'Postal Code Lookup', value: 'cep' },
 				{ name: 'Account (Credit Balance)', value: 'conta' },

@@ -4,6 +4,7 @@ import type {
 	IHttpRequestMethods,
 	IHttpRequestOptions,
 	INodeExecutionData,
+	INodeProperties,
 	INodeType,
 	INodeTypeDescription,
 	JsonObject,
@@ -11,9 +12,12 @@ import type {
 import { NodeApiError, NodeConnectionTypes, NodeOperationError, sleep } from 'n8n-workflow';
 
 import {
+	EMPRESA_PATHS,
 	ERROR_MAP,
 	NFSE_CANCEL_PATHS,
 	NFSE_PATHS,
+	empresaFields,
+	empresaNfseConfigFields,
 	nfseCancelFields,
 	nfseFields,
 } from './properties.generated';
@@ -30,6 +34,7 @@ const STATUS_IN_PROGRESS = 'processando';
 const SCOPE_BY_RESOURCE: Record<string, string> = {
 	conta: 'conta',
 	nfse: 'nfse',
+	empresa: 'empresa',
 	cnpj: 'cnpj',
 	cep: 'cep',
 };
@@ -83,6 +88,11 @@ export class AcbrApi implements INodeType {
 						description: 'Credit balance and consumption of your ACBr API account',
 					},
 					{ name: 'CNPJ', value: 'cnpj' },
+					{
+						name: 'Company',
+						value: 'empresa',
+						description: 'Companies registered under your tenant, and their NFS-e settings',
+					},
 					{ name: 'Postal Code', value: 'cep' },
 					{
 						name: 'Service Invoice',
@@ -197,6 +207,24 @@ export class AcbrApi implements INodeType {
 				displayOptions: { show: { resource: ['nfse'], operation: ['getAll'] } },
 			},
 			{
+				displayName: 'Environment',
+				name: 'listEnvironment',
+				type: 'options',
+				default: '',
+				description:
+					'Which environment to list from. This is the environment the invoices were issued in, which is independent of the host the credential points at. Leave it on the default to keep listing from the same environment as the credential.',
+				options: [
+					{
+						name: 'Same as the Credential',
+						value: '',
+						description: 'Lists from the environment the credential points at',
+					},
+					{ name: 'Staging', value: 'homologacao' },
+					{ name: 'Production', value: 'producao' },
+				],
+				displayOptions: { show: { resource: ['nfse'], operation: ['getAll'] } },
+			},
+			{
 				displayName: 'External Reference',
 				name: 'listReference',
 				type: 'string',
@@ -223,6 +251,14 @@ export class AcbrApi implements INodeType {
 				displayOptions: {
 					show: { resource: ['nfse'], operation: ['create'], waitForAuthorization: [true] },
 				},
+			},
+			{
+				displayName:
+					'Environment here is the environment of the document, not of the connection. The credential chooses which host to call; this chooses which environment the invoice is issued in, and the two are independent. A production credential can issue a staging invoice for a company registered as staging.',
+				name: 'environmentNotice',
+				type: 'notice',
+				default: '',
+				displayOptions: { show: { resource: ['nfse'], operation: ['create', 'preview'] } },
 			},
 			...nfseFields,
 
@@ -318,6 +354,116 @@ export class AcbrApi implements INodeType {
 				description: 'How many movements to skip, to page through older entries',
 				displayOptions: { show: { resource: ['conta'], operation: ['getStatement'] } },
 			},
+
+			// ---------- Company ----------
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				default: 'get',
+				displayOptions: { show: { resource: ['empresa'] } },
+				options: [
+					{
+						name: 'Create',
+						value: 'create',
+						action: 'Register a company',
+						description: 'Registers a company under your tenant',
+					},
+					{
+						name: 'Delete',
+						value: 'delete',
+						action: 'Delete a company',
+						description: 'Removes the company registration from your tenant',
+					},
+					{ name: 'Get', value: 'get', action: 'Get a company' },
+					{ name: 'Get Many', value: 'getAll', action: 'Get many companies' },
+					{
+						name: 'Get Service Invoice Settings',
+						value: 'getNfseConfig',
+						action: 'Get the service invoice settings of a company',
+						description: 'Reads the NFS-e settings: environment, numbering and tax regime',
+					},
+					{
+						name: 'Update',
+						value: 'update',
+						action: 'Update a company',
+						description: 'Replaces the registration data of a company already registered',
+					},
+					{
+						name: 'Update Service Invoice Settings',
+						value: 'updateNfseConfig',
+						action: 'Update the service invoice settings of a company',
+						description: 'Step three of registration: the NFS-e settings the company issues with',
+					},
+				],
+			},
+			{
+				displayName:
+					'Registering a company is step one of three. The certificate and the per-service settings come after it, and the digital certificate is not uploaded by this node — use the ACBr API console for it.',
+				name: 'companyNotice',
+				type: 'notice',
+				default: '',
+				displayOptions: { show: { resource: ['empresa'], operation: ['create'] } },
+			},
+			{
+				displayName: 'Company Tax ID',
+				name: 'companyTaxId',
+				type: 'string',
+				default: '',
+				required: true,
+				placeholder: '18760540000139',
+				description: 'CPF or CNPJ of the company, digits only',
+				displayOptions: {
+					show: {
+						resource: ['empresa'],
+						operation: ['get', 'delete', 'getNfseConfig', 'updateNfseConfig'],
+					},
+				},
+			},
+			{
+				displayName: 'Deleting a company does not delete the invoices it issued. It removes the registration, so the company can no longer issue.',
+				name: 'companyDeleteNotice',
+				type: 'notice',
+				default: '',
+				displayOptions: { show: { resource: ['empresa'], operation: ['delete'] } },
+			},
+			{
+				displayName: 'Limit',
+				name: 'companyLimit',
+				type: 'number',
+				default: 10,
+				typeOptions: { minValue: 1, maxValue: 100 },
+				description: 'Max number of results to return',
+				displayOptions: { show: { resource: ['empresa'], operation: ['getAll'] } },
+			},
+			{
+				displayName: 'Skip',
+				name: 'companySkip',
+				type: 'number',
+				default: 0,
+				typeOptions: { minValue: 0 },
+				description: 'How many companies to skip, to page through the list',
+				displayOptions: { show: { resource: ['empresa'], operation: ['getAll'] } },
+			},
+			{
+				displayName: 'Filter by Tax ID',
+				name: 'companyFilterTaxId',
+				type: 'string',
+				default: '',
+				description: 'Return only the company with this CPF or CNPJ, digits only',
+				displayOptions: { show: { resource: ['empresa'], operation: ['getAll'] } },
+			},
+			{
+				displayName: 'Filter by Legal Name',
+				name: 'companyFilterLegalName',
+				type: 'string',
+				default: '',
+				description: 'Return companies whose name or legal name contains this text',
+				displayOptions: { show: { resource: ['empresa'], operation: ['getAll'] } },
+			},
+			...empresaFields,
+			...empresaNfseConfigFields,
 
 		],
 	};
@@ -443,17 +589,6 @@ export class AcbrApi implements INodeType {
 				} else if (resource === 'nfse' && (operation === 'create' || operation === 'preview')) {
 					const body = buildInvoicePayload.call(this, i);
 
-					if (body.ambiente !== environment) {
-						throw new NodeOperationError(
-							this.getNode(),
-							'The Environment of this operation does not match the environment of the credential',
-							{
-								description: `The credential points at ${environment}, the operation is set to ${String(body.ambiente)}. Credentials are issued per environment and are not interchangeable — set both to the same value.`,
-								itemIndex: i,
-							},
-						);
-					}
-
 					if (operation === 'preview') {
 						result = { preview: true, payload: body };
 					} else {
@@ -491,10 +626,49 @@ export class AcbrApi implements INodeType {
 						'',
 					);
 					const reference = this.getNodeParameter('listReference', i, '') as string;
-					const qs: IDataObject = { cpf_cnpj: cpfCnpj, ambiente: environment };
+					const listEnvironment = this.getNodeParameter('listEnvironment', i, '') as string;
+					const qs: IDataObject = {
+						cpf_cnpj: cpfCnpj,
+						ambiente: listEnvironment || environment,
+					};
 					if (reference) qs.reference = reference;
 					const list = await request('GET', '/nfse', { qs });
 					result = (list.data as IDataObject[] | undefined) ?? [];
+				} else if (resource === 'empresa' && operation === 'create') {
+					const body = buildPayloadFrom.call(this, i, empresaFields, EMPRESA_PATHS);
+					result = await request('POST', '/empresas', { body });
+				} else if (resource === 'empresa' && operation === 'update') {
+					const taxId = (this.getNodeParameter('taxId', i) as string).replace(/\D/g, '');
+					const body = buildPayloadFrom.call(this, i, empresaFields, EMPRESA_PATHS);
+					result = await request('PUT', `/empresas/${taxId}`, { body });
+				} else if (resource === 'empresa' && operation === 'get') {
+					const taxId = (this.getNodeParameter('companyTaxId', i) as string).replace(/\D/g, '');
+					result = await request('GET', `/empresas/${taxId}`);
+				} else if (resource === 'empresa' && operation === 'delete') {
+					const taxId = (this.getNodeParameter('companyTaxId', i) as string).replace(/\D/g, '');
+					await request('DELETE', `/empresas/${taxId}`);
+					// The API answers 204 with no body; return something the next node can read.
+					result = { cpf_cnpj: taxId, deleted: true };
+				} else if (resource === 'empresa' && operation === 'getAll') {
+					const qs: IDataObject = {
+						$top: this.getNodeParameter('companyLimit', i, 10),
+						$skip: this.getNodeParameter('companySkip', i, 0),
+					};
+					const filterTaxId = (
+						this.getNodeParameter('companyFilterTaxId', i, '') as string
+					).replace(/\D/g, '');
+					const filterName = this.getNodeParameter('companyFilterLegalName', i, '') as string;
+					if (filterTaxId) qs.cpf_cnpj = filterTaxId;
+					if (filterName) qs.nome_razao_social = filterName;
+					const list = await request('GET', '/empresas', { qs });
+					result = (list.data as IDataObject[] | undefined) ?? [];
+				} else if (resource === 'empresa' && operation === 'getNfseConfig') {
+					const taxId = (this.getNodeParameter('companyTaxId', i) as string).replace(/\D/g, '');
+					result = await request('GET', `/empresas/${taxId}/nfse`);
+				} else if (resource === 'empresa' && operation === 'updateNfseConfig') {
+					const taxId = (this.getNodeParameter('companyTaxId', i) as string).replace(/\D/g, '');
+					const body = buildPayloadFrom.call(this, i, empresaNfseConfigFields, EMPRESA_PATHS);
+					result = await request('PUT', `/empresas/${taxId}/nfse`, { body });
 				} else {
 					throw new NodeOperationError(
 						this.getNode(),
@@ -539,6 +713,36 @@ export class AcbrApi implements INodeType {
  * @param i Index of the item being processed.
  * @returns The request body for POST /nfse/dps.
  */
+/**
+ * Assembles a request body from a generated set of properties and its path map.
+ *
+ * The field list is the same array the UI renders, so a parameter can never be
+ * read for an operation that does not display it — which is what keeps the
+ * Company payloads from borrowing each other's fields. Notices carry no value
+ * and are skipped; `setByPath` drops anything left blank.
+ *
+ * @param i Item index.
+ * @param fields Generated properties of the block being sent.
+ * @param paths Parameter name to JSON path, from the same de-para block.
+ */
+function buildPayloadFrom(
+	this: IExecuteFunctions,
+	i: number,
+	fields: INodeProperties[],
+	paths: Record<string, string>,
+): IDataObject {
+	const body: IDataObject = {};
+
+	for (const field of fields) {
+		if (field.type === 'notice') continue;
+		const path = paths[field.name];
+		if (!path) continue;
+		setByPath(body, path, this.getNodeParameter(field.name, i, ''));
+	}
+
+	return body;
+}
+
 function buildInvoicePayload(this: IExecuteFunctions, i: number): IDataObject {
 	const body: IDataObject = {};
 
