@@ -4,6 +4,11 @@
 # Actions with provenance; publishing from a developer machine is not
 # accepted. Provenance proves cryptographically which workflow, repository
 # and commit produced the tarball.
+#
+# Authentication is npm trusted publishing (OIDC): npm trusts this workflow
+# in this repository, configured on the package page, so no token is stored
+# anywhere. npm stops accepting granular tokens with Bypass 2FA for direct
+# publishing in January 2027.
 
 name: publish
 
@@ -14,7 +19,7 @@ on:
 
 permissions:
   contents: read
-  # Required for provenance
+  # Required for trusted publishing (OIDC) and for provenance
   id-token: write
 
 jobs:
@@ -25,13 +30,15 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Trusted publishing needs npm >= 11.5.1. Node 22 still bundles
+          # npm 10; Node 24 bundles npm 11.
+          node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
 
       # A Release whose tag does not match package.json would publish the wrong
       # version, and a version published to npm can never be replaced. Fail
-      # before the token is ever used.
+      # before anything is published.
       - name: Tag matches the version in package.json
         if: github.event_name == 'release'
         run: |
@@ -61,5 +68,3 @@ jobs:
       # --access public is required for a scoped package: npm publishes it
       # as restricted by default.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
