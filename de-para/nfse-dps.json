@@ -48,7 +48,7 @@
 			"required": true,
 			"section": "core",
 			"fill": "user",
-			"description": "Target environment (ambiente). Must match what the company has configured for NFS-e — readable at GET /empresas/{cnpj}/nfse.",
+			"description": "Target environment (ambiente) of the document. Must match what the company has configured for NFS-e — readable at GET /empresas/{cnpj}/nfse. Independent of the credential, which only selects the host: a production credential can issue a staging document.",
 			"options": [
 				{
 					"value": "homologacao",

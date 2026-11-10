@@ -221,16 +221,35 @@ const cancelGenerated = generateResource({
 	collectionPrefix: 'nfse',
 });
 
-const companyGenerated = generateResource({
-	fields: {
-		...company.cadastro.campos,
-		...company.certificado.campos,
-		...company.configuracaoNfse.campos,
-	},
+// Three blocks of the Company tag, three sets of properties — one per operation
+// that sends them. Generating them together under `resource: ['empresa']` alone
+// put all 42 fields on a Delete, and a declared-but-unused property is the
+// finding the n8n review has already returned twice.
+const companyRegistration = generateResource({
+	fields: company.cadastro.campos,
 	sections: undefined,
-	displayWhen: { resource: ['empresa'] },
+	displayWhen: { resource: ['empresa'], operation: ['create', 'update'] },
 	collectionPrefix: 'empresa',
 });
+
+const companyNfseConfig = generateResource({
+	fields: company.configuracaoNfse.campos,
+	sections: undefined,
+	displayWhen: { resource: ['empresa'], operation: ['updateNfseConfig'] },
+	collectionPrefix: 'empresaNfse',
+});
+
+// `company.certificado` is deliberately NOT generated. The operation stays out
+// while P-38 is open — the A1 and its password would persist in execution data.
+//
+// Generating it "but not importing it" was tried and reverted: the export still
+// lands in dist/, and dist/ is what the package publishes. That is the same
+// declared-and-not-implemented shape the audit of 2026-10-09 removed, one file
+// over. The mapping stays in the de-para, which is source and is not published.
+const companyGenerated = {
+	props: [...companyRegistration.props, ...companyNfseConfig.props],
+	paths: { ...companyRegistration.paths, ...companyNfseConfig.paths },
+};
 
 const errors = Object.fromEntries(
 	Object.entries(nfse.erros)
@@ -269,11 +288,22 @@ export const nfseCancelFields: INodeProperties[] = ${JSON.stringify(
 	'\t',
 )};
 
+/** Registration fields: the body of POST /empresas and PUT /empresas/{cpf_cnpj}. */
 export const empresaFields: INodeProperties[] = ${JSON.stringify(
-	companyGenerated.props,
+	companyRegistration.props,
 	null,
 	'\t',
 )};
+
+/** NFS-e configuration fields: the body of PUT /empresas/{cpf_cnpj}/nfse. */
+export const empresaNfseConfigFields: INodeProperties[] = ${JSON.stringify(
+	companyNfseConfig.props,
+	null,
+	'\t',
+)};
+
+// The certificate block of de-para/empresa.json is not generated: see the note
+// in scripts/generate-properties.mjs and P-38.
 
 /**
  * n8n parameter name to JSON path in the API payload.
